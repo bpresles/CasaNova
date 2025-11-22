@@ -1,0 +1,73 @@
+{
+  "FR": [
+    {
+      "name": "Pole Emploi International",
+      "url": "https://www.pole-emploi.fr/candidat/vos-recherches/preparer-votre-candidature/travailler-a-letranger.html",
+      "type": "government"
+    },
+    {
+      "name": "EURES France",
+      "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "type": "eu_portal"
+    }
+  ],
+  "DE": [
+    {
+      "name": "Make it in Germany",
+      "url": "https://www.make-it-in-germany.com/en/working-in-germany",
+      "type": "government"
+    },
+    {
+      "name": "EURES Germany",
+      "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "type": "eu_portal"
+    }
+  ],
+  "ES": [
+    {
+      "name": "EURES Spain",
+      "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+      "type": "eu_portal"
+    }
+  ],
+  "NL": [
+    {
+      "name": "Work in NL",
+      "url": "https://www.workingnl.nl/",
+      "type": "government"
+    },
+    {
+      "name": "EURES Netherlands",
+      "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+      "type": "eu_portal"
+    }
+  ],
+  "GB": [
+    {
+      "name": "UK Government Working",
+      "url": "https://www.gov.uk/working-in-the-uk",
+      "type": "government"
+    }
+  ],
+  "CA": [
+    {
+      "name": "Job Bank Canada",
+      "url": "https://www.jobbank.gc.ca/trend-analysis",
+      "type": "government"
+    }
+  ],
+  "AU": [
+    {
+      "name": "Australian Government Jobs",
+      "url": "https://www.homeaffairs.gov.au/trav/work",
+      "type": "government"
+    }
+  ],
+  "US": [
+    {
+      "name": "USCIS Employment",
+      "url": "https://www.uscis.gov/working-in-the-united-states",
+      "type": "government"
+    }
+  ]
+}

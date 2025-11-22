@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm view:*)",
+      "Bash(npm install:*)",
+      "Bash(timeout 5 npm run dev:*)",
+      "Bash(timeout 10 npm start)",
+      "Bash(npm run typecheck:*)",
+      "Bash(node:*)",
+      "Bash(npm rebuild:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(timeout 10 npm run dev:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

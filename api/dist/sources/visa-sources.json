@@ -1,0 +1,51 @@
+{
+    "FR": [
+        {
+            "name": "France-Visas Official",
+            "url": "https://france-visas.gouv.fr/en/web/france-visas/tourist-short-stay-visa",
+            "type": "government"
+        }
+    ],
+    "DE": [
+        {
+            "name": "German Foreign Office",
+            "url": "https://www.auswaertiges-amt.de/en/visa-service",
+            "type": "government"
+        }
+    ],
+    "ES": [
+        {
+            "name": "Spain Visa Info",
+            "url": "https://www.exteriores.gob.es/en/ServiciosAlCiudadano/Paginas/Visados.aspx",
+            "type": "government"
+        }
+    ],
+    "US": [
+        {
+            "name": "US State Department",
+            "url": "https://travel.state.gov/content/travel/en/us-visas.html",
+            "type": "government"
+        }
+    ],
+    "CA": [
+        {
+            "name": "IRCC Canada",
+            "url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada.html",
+            "type": "government"
+        }
+    ],
+    "GB": [
+        {
+            "name": "UK Government Visas",
+            "url": "https://www.gov.uk/browse/visas-immigration",
+            "type": "government"
+        }
+    ],
+    "AU": [
+        {
+            "name": "Australian Immigration",
+            "url": "https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-finder",
+            "type": "government"
+        }
+    ]
+}

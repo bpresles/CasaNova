@@ -1,0 +1,30 @@
+{
+    "FR": [
+        {
+            "name": "Service-Public.fr Banking",
+            "url": "https://www.service-public.fr/particuliers/vosdroits/N91",
+            "type": "government"
+        }
+    ],
+    "DE": [
+        {
+            "name": "Make it in Germany Banking",
+            "url": "https://www.make-it-in-germany.com/en/living-in-germany/money-and-banking",
+            "type": "government"
+        }
+    ],
+    "GB": [
+        {
+            "name": "UK Money Advice",
+            "url": "https://www.moneyadviceservice.org.uk/en/articles/how-to-open-a-bank-account",
+            "type": "government"
+        }
+    ],
+    "CA": [
+        {
+            "name": "Canada Financial",
+            "url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/new-immigrants/new-life-canada/banking.html",
+            "type": "government"
+        }
+    ]
+}

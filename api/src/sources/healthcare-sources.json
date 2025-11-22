@@ -1,0 +1,42 @@
+{
+  "FR": [
+    {
+      "name": "Ameli.fr",
+      "url": "https://www.ameli.fr/assure/droits-demarches/europe-international/protection-sociale-etranger-france",
+      "type": "government"
+    },
+    {
+      "name": "EURES France Healthcare",
+      "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "type": "eu_portal"
+    }
+  ],
+  "DE": [
+    {
+      "name": "Make it in Germany Healthcare",
+      "url": "https://www.make-it-in-germany.com/en/living-in-germany/health-insurance",
+      "type": "government"
+    }
+  ],
+  "GB": [
+    {
+      "name": "NHS Information",
+      "url": "https://www.nhs.uk/using-the-nhs/healthcare-abroad/moving-abroad/",
+      "type": "government"
+    }
+  ],
+  "CA": [
+    {
+      "name": "Canada Healthcare",
+      "url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/new-immigrants/new-life-canada/health-care.html",
+      "type": "government"
+    }
+  ],
+  "AU": [
+    {
+      "name": "Australia Medicare",
+      "url": "https://www.servicesaustralia.gov.au/medicare-for-visitors-to-australia",
+      "type": "government"
+    }
+  ]
+}

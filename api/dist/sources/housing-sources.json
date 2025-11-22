@@ -1,0 +1,61 @@
+{
+    "FR": [
+        {
+            "name": "Service-Public.fr Housing",
+            "url": "https://www.service-public.fr/particuliers/vosdroits/N19808",
+            "type": "government"
+        },
+        {
+            "name": "EURES France Living",
+            "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+            "type": "eu_portal"
+        }
+    ],
+    "DE": [
+        {
+            "name": "Make it in Germany Housing",
+            "url": "https://www.make-it-in-germany.com/en/living-in-germany/housing",
+            "type": "government"
+        },
+        {
+            "name": "EURES Germany Living",
+            "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+            "type": "eu_portal"
+        }
+    ],
+    "ES": [
+        {
+            "name": "EURES Spain Living",
+            "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-spain_en",
+            "type": "eu_portal"
+        }
+    ],
+    "NL": [
+        {
+            "name": "EURES Netherlands Living",
+            "url": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-netherlands_en",
+            "type": "eu_portal"
+        }
+    ],
+    "GB": [
+        {
+            "name": "UK Government Housing",
+            "url": "https://www.gov.uk/browse/housing-local-services/renting-property",
+            "type": "government"
+        }
+    ],
+    "CA": [
+        {
+            "name": "Canada Housing",
+            "url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/new-immigrants/new-life-canada/housing.html",
+            "type": "government"
+        }
+    ],
+    "AU": [
+        {
+            "name": "Australia Housing",
+            "url": "https://www.homeaffairs.gov.au/trav/life/acco",
+            "type": "government"
+        }
+    ]
+}
