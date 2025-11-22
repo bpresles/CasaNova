@@ -1,9 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from "typeorm";
-import { VisaInfo } from "./visa-info.entity.js";
-import { JobInfo } from "./job-info.entity.js";
-import { HousingInfo } from "./housing-info.entity.js";
-import { HealthcareInfo } from "./healthcare-info.entity.js";
-import { BankingInfo } from "./banking-info.entity.js";
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+} from "typeorm";
 
 @Entity("countries")
 export class Country {
@@ -28,18 +30,18 @@ export class Country {
   @UpdateDateColumn({ type: "datetime" })
   updated_at: Date;
 
-  @OneToMany(() => VisaInfo, (visa) => visa.country)
-  visas: VisaInfo[];
+  @OneToMany("VisaInfo", "country")
+  visas: any[];
 
-  @OneToMany(() => JobInfo, (job) => job.country)
-  jobs: JobInfo[];
+  @OneToMany("JobInfo", "country")
+  jobs: any[];
 
-  @OneToMany(() => HousingInfo, (housing) => housing.country)
-  housing: HousingInfo[];
+  @OneToMany("HousingInfo", "country")
+  housing: any[];
 
-  @OneToMany(() => HealthcareInfo, (healthcare) => healthcare.country)
-  healthcare: HealthcareInfo[];
+  @OneToMany("HealthcareInfo", "country")
+  healthcare: any[];
 
-  @OneToMany(() => BankingInfo, (banking) => banking.country)
-  banking: BankingInfo[];
+  @OneToMany("BankingInfo", "country")
+  banking: any[];
 }
