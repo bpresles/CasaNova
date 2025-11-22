@@ -1,30 +1,14 @@
-import { Module, Global } from "@nestjs/common";
+import { Global, Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { DatabaseService } from "./database.service.js";
-import {
-  Country,
-  VisaInfo,
-  JobInfo,
-  HousingInfo,
-  HealthcareInfo,
-  BankingInfo,
-  ScrapeLog,
-} from "../../entities/index.js";
+import { ScrapeLog } from "../../entities/scrape-log.entity.js";
 
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      Country,
-      VisaInfo,
-      JobInfo,
-      HousingInfo,
-      HealthcareInfo,
-      BankingInfo,
-      ScrapeLog,
-    ]),
+    TypeOrmModule.forFeature([ScrapeLog]),
   ],
   providers: [DatabaseService],
-  exports: [DatabaseService, TypeOrmModule],
+  exports: [DatabaseService],
 })
 export class DatabaseModule {}

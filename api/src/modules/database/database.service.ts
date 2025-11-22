@@ -11,7 +11,7 @@ export class DatabaseService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    console.log("Database initialized successfully with TypeORM");
+    // Database ready
   }
 
   async logScrape(
