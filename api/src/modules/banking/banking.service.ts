@@ -1,18 +1,18 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import type { Cheerio } from "cheerio";
 import { Repository } from "typeorm";
-import type { CheerioAPI, Cheerio } from "cheerio";
-import { DatabaseService } from "../database/database.service.js";
 import { BankingInfo } from "../../entities/banking-info.entity.js";
 import { Country } from "../../entities/country.entity.js";
 import {
-  fetchPage,
-  extractText,
   cleanText,
   extractListItems,
+  extractText,
+  fetchPage,
 } from "../../scrapers/base-scraper.js";
-import type { Source, SourceMap, ScrapeResult } from "../../types/index.js";
 import bankingSources from "../../sources/banking-sources.json" with { type: "json" };
+import type { ScrapeResult, Source, SourceMap } from "../../types/index.js";
+import { DatabaseService } from "../database/database.service.js";
 
 const sources: SourceMap = bankingSources;
 
@@ -23,6 +23,7 @@ export class BankingService {
     private bankingInfoRepository: Repository<BankingInfo>,
     @InjectRepository(Country)
     private countryRepository: Repository<Country>,
+    @Inject(DatabaseService)
     private readonly databaseService: DatabaseService,
   ) {}
 

@@ -1,24 +1,24 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Not, IsNull } from "typeorm";
-import type { CheerioAPI, Cheerio } from "cheerio";
-import { DatabaseService } from "../database/database.service.js";
-import { HealthcareInfo } from "../../entities/healthcare-info.entity.js";
+import type { Cheerio, CheerioAPI } from "cheerio";
+import { IsNull, Not, Repository } from "typeorm";
 import { Country } from "../../entities/country.entity.js";
+import { HealthcareInfo } from "../../entities/healthcare-info.entity.js";
 import {
-  fetchPage,
-  extractText,
   cleanText,
   extractListItems,
+  extractText,
+  fetchPage,
 } from "../../scrapers/base-scraper.js";
+import healthcareSources from "../../sources/healthcare-sources.json" with { type: "json" };
 import type {
+  EmergencyNumbers,
+  ScrapeResult,
   Source,
   SourceMap,
   UsefulLink,
-  EmergencyNumbers,
-  ScrapeResult,
 } from "../../types/index.js";
-import healthcareSources from "../../sources/healthcare-sources.json" with { type: "json" };
+import { DatabaseService } from "../database/database.service.js";
 
 const sources: SourceMap = healthcareSources;
 
@@ -29,6 +29,7 @@ export class HealthcareService {
     private healthcareInfoRepository: Repository<HealthcareInfo>,
     @InjectRepository(Country)
     private countryRepository: Repository<Country>,
+    @Inject(DatabaseService)
     private readonly databaseService: DatabaseService,
   ) {}
 

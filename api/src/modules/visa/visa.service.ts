@@ -1,18 +1,18 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import type { Cheerio } from "cheerio";
 import { Repository } from "typeorm";
-import type { CheerioAPI, Cheerio } from "cheerio";
-import { DatabaseService } from "../database/database.service.js";
-import { VisaInfo } from "../../entities/visa-info.entity.js";
 import { Country } from "../../entities/country.entity.js";
+import { VisaInfo } from "../../entities/visa-info.entity.js";
 import {
-  fetchPage,
-  extractText,
   cleanText,
   extractListItems,
+  extractText,
+  fetchPage,
 } from "../../scrapers/base-scraper.js";
-import type { Source, SourceMap, ScrapeResult } from "../../types/index.js";
 import visaSources from "../../sources/visa-sources.json" with { type: "json" };
+import type { ScrapeResult, Source, SourceMap } from "../../types/index.js";
+import { DatabaseService } from "../database/database.service.js";
 
 const sources: SourceMap = visaSources;
 
@@ -23,10 +23,12 @@ export class VisaService {
     private visaInfoRepository: Repository<VisaInfo>,
     @InjectRepository(Country)
     private countryRepository: Repository<Country>,
+    @Inject(DatabaseService)
     private readonly databaseService: DatabaseService,
   ) {}
 
   async findAll(country?: string, type?: string, language?: string) {
+    
     const queryBuilder = this.visaInfoRepository.createQueryBuilder("visa");
 
     if (country) {

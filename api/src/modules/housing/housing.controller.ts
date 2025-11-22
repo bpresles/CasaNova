@@ -1,23 +1,13 @@
-import { Controller, Get, Post, Param, Query } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Post, Query } from "@nestjs/common";
 import { HousingService } from "./housing.service.js";
 
 @Controller("housing")
 export class HousingController {
-  constructor(private readonly housingService: HousingService) {}
+  constructor(@Inject(HousingService) private readonly housingService: HousingService) {}
 
   @Get()
-  async findAll(
-    @Query("country") country?: string,
-    @Query("city") city?: string,
-    @Query("category") category?: string,
-    @Query("language") language?: string,
-  ) {
-    const data = await this.housingService.findAll(
-      country,
-      city,
-      category,
-      language,
-    );
+  async findAll(@Query("country") country?: string, @Query("city") city?: string, @Query("category") category?: string, @Query("language") language?: string) {
+    const data = await this.housingService.findAll(country, city, category, language);
     return { count: data.length, data };
   }
 
@@ -40,16 +30,8 @@ export class HousingController {
   }
 
   @Get(":countryCode")
-  async findByCountry(
-    @Param("countryCode") countryCode: string,
-    @Query("city") city?: string,
-    @Query("category") category?: string,
-  ) {
-    const result = await this.housingService.findByCountry(
-      countryCode,
-      city,
-      category,
-    );
+  async findByCountry(@Param("countryCode") countryCode: string, @Query("city") city?: string, @Query("category") category?: string) {
+    const result = await this.housingService.findByCountry(countryCode, city, category);
     if (result.data.length === 0) {
       return {
         error: "No housing information found for this country",
@@ -60,14 +42,8 @@ export class HousingController {
   }
 
   @Get(":countryCode/:city")
-  async findByCountryAndCity(
-    @Param("countryCode") countryCode: string,
-    @Param("city") city: string,
-  ) {
-    const data = await this.housingService.findByCountryAndCity(
-      countryCode,
-      city,
-    );
+  async findByCountryAndCity(@Param("countryCode") countryCode: string, @Param("city") city: string) {
+    const data = await this.housingService.findByCountryAndCity(countryCode, city);
     if (data.length === 0) {
       return {
         error: "No housing information found",
@@ -80,9 +56,7 @@ export class HousingController {
 
   @Post("scrape/:countryCode")
   async scrapeCountry(@Param("countryCode") countryCode: string) {
-    const results = await this.housingService.scrapeCountry(
-      countryCode.toUpperCase(),
-    );
+    const results = await this.housingService.scrapeCountry(countryCode.toUpperCase());
     return {
       message: `Scraped housing information for ${countryCode.toUpperCase()}`,
       itemsScraped: results.length,

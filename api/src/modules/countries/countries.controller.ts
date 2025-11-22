@@ -1,9 +1,9 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Query } from "@nestjs/common";
 import { CountriesService } from "./countries.service.js";
 
 @Controller("countries")
 export class CountriesController {
-  constructor(private readonly countriesService: CountriesService) {}
+  constructor(@Inject(CountriesService) private readonly countriesService: CountriesService) {}
 
   @Get()
   async findAll(@Query("region") region?: string) {

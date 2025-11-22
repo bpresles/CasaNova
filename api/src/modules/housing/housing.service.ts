@@ -1,23 +1,23 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, IsNull, Not, Like } from "typeorm";
-import type { CheerioAPI, Cheerio } from "cheerio";
-import { DatabaseService } from "../database/database.service.js";
-import { HousingInfo } from "../../entities/housing-info.entity.js";
+import type { Cheerio, CheerioAPI } from "cheerio";
+import { Like, Repository } from "typeorm";
 import { Country } from "../../entities/country.entity.js";
+import { HousingInfo } from "../../entities/housing-info.entity.js";
 import {
-  fetchPage,
-  extractText,
   cleanText,
   extractListItems,
+  extractText,
+  fetchPage,
 } from "../../scrapers/base-scraper.js";
+import housingSources from "../../sources/housing-sources.json" with { type: "json" };
 import type {
-  Source,
-  SourceMap,
   RentalPlatform,
   ScrapeResult,
+  Source,
+  SourceMap,
 } from "../../types/index.js";
-import housingSources from "../../sources/housing-sources.json" with { type: "json" };
+import { DatabaseService } from "../database/database.service.js";
 
 const sources: SourceMap = housingSources;
 
@@ -28,6 +28,7 @@ export class HousingService {
     private housingInfoRepository: Repository<HousingInfo>,
     @InjectRepository(Country)
     private countryRepository: Repository<Country>,
+    @Inject(DatabaseService)
     private readonly databaseService: DatabaseService,
   ) {}
 

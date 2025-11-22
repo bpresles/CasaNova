@@ -1,23 +1,23 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, IsNull, Not } from "typeorm";
 import type { Cheerio } from "cheerio";
-import { DatabaseService } from "../database/database.service.js";
-import { JobInfo } from "../../entities/job-info.entity.js";
+import { IsNull, Not, Repository } from "typeorm";
 import { Country } from "../../entities/country.entity.js";
+import { JobInfo } from "../../entities/job-info.entity.js";
 import {
-  fetchPage,
-  extractText,
   cleanText,
   extractListItems,
+  extractText,
+  fetchPage,
 } from "../../scrapers/base-scraper.js";
+import jobSources from "../../sources/job-sources.json" with { type: "json" };
 import type {
-  Source,
-  SourceMap,
   JobPortal,
   ScrapeResult,
+  Source,
+  SourceMap,
 } from "../../types/index.js";
-import jobSources from "../../sources/job-sources.json" with { type: "json" };
+import { DatabaseService } from "../database/database.service.js";
 
 const sources: SourceMap = jobSources;
 
@@ -28,6 +28,7 @@ export class JobService {
     private jobInfoRepository: Repository<JobInfo>,
     @InjectRepository(Country)
     private countryRepository: Repository<Country>,
+    @Inject(DatabaseService)
     private readonly databaseService: DatabaseService,
   ) {}
 

@@ -1,21 +1,13 @@
-import { Controller, Get, Post, Param, Query } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Post, Query } from "@nestjs/common";
 import { HealthcareService } from "./healthcare.service.js";
 
 @Controller("healthcare")
 export class HealthcareController {
-  constructor(private readonly healthcareService: HealthcareService) {}
+  constructor(@Inject(HealthcareService) private readonly healthcareService: HealthcareService) {}
 
   @Get()
-  async findAll(
-    @Query("country") country?: string,
-    @Query("category") category?: string,
-    @Query("language") language?: string,
-  ) {
-    const data = await this.healthcareService.findAll(
-      country,
-      category,
-      language,
-    );
+  async findAll(@Query("country") country?: string, @Query("category") category?: string, @Query("language") language?: string) {
+    const data = await this.healthcareService.findAll(country, category, language);
     return { count: data.length, data };
   }
 
@@ -27,8 +19,7 @@ export class HealthcareController {
 
   @Get("emergency/:countryCode")
   async findEmergencyNumbers(@Param("countryCode") countryCode: string) {
-    const emergencyNumbers =
-      await this.healthcareService.findEmergencyNumbers(countryCode);
+    const emergencyNumbers = await this.healthcareService.findEmergencyNumbers(countryCode);
     if (!emergencyNumbers) {
       return {
         error: "No emergency numbers found for this country",
@@ -42,14 +33,8 @@ export class HealthcareController {
   }
 
   @Get(":countryCode")
-  async findByCountry(
-    @Param("countryCode") countryCode: string,
-    @Query("category") category?: string,
-  ) {
-    const result = await this.healthcareService.findByCountry(
-      countryCode,
-      category,
-    );
+  async findByCountry(@Param("countryCode") countryCode: string, @Query("category") category?: string) {
+    const result = await this.healthcareService.findByCountry(countryCode, category);
     if (result.data.length === 0) {
       return {
         error: "No healthcare information found for this country",
@@ -61,9 +46,7 @@ export class HealthcareController {
 
   @Post("scrape/:countryCode")
   async scrapeCountry(@Param("countryCode") countryCode: string) {
-    const results = await this.healthcareService.scrapeCountry(
-      countryCode.toUpperCase(),
-    );
+    const results = await this.healthcareService.scrapeCountry(countryCode.toUpperCase());
     return {
       message: `Scraped healthcare information for ${countryCode.toUpperCase()}`,
       itemsScraped: results.length,
