@@ -6,33 +6,33 @@ export class VisaController {
   constructor(private readonly visaService: VisaService) {}
 
   @Get()
-  findAll(
+  async findAll(
     @Query("country") country?: string,
     @Query("type") type?: string,
-    @Query("language") language?: string
+    @Query("language") language?: string,
   ) {
-    const data = this.visaService.findAll(country, type, language);
+    const data = await this.visaService.findAll(country, type, language);
     return { count: data.length, data };
   }
 
   @Get("countries")
-  findCountries() {
-    const data = this.visaService.findCountries();
+  async findCountries() {
+    const data = await this.visaService.findCountries();
     return { count: data.length, data };
   }
 
   @Get("types")
-  findTypes() {
-    const data = this.visaService.findTypes();
+  async findTypes() {
+    const data = await this.visaService.findTypes();
     return { data };
   }
 
   @Get(":countryCode")
-  findByCountry(
+  async findByCountry(
     @Param("countryCode") countryCode: string,
-    @Query("type") type?: string
+    @Query("type") type?: string,
   ) {
-    const result = this.visaService.findByCountry(countryCode, type);
+    const result = await this.visaService.findByCountry(countryCode, type);
     if (result.data.length === 0) {
       return {
         error: "No visa information found for this country",
@@ -43,11 +43,14 @@ export class VisaController {
   }
 
   @Get(":countryCode/:visaType")
-  findByCountryAndType(
+  async findByCountryAndType(
     @Param("countryCode") countryCode: string,
-    @Param("visaType") visaType: string
+    @Param("visaType") visaType: string,
   ) {
-    const data = this.visaService.findByCountryAndType(countryCode, visaType);
+    const data = await this.visaService.findByCountryAndType(
+      countryCode,
+      visaType,
+    );
     if (data.length === 0) {
       return {
         error: "No visa information found",
@@ -60,7 +63,9 @@ export class VisaController {
 
   @Post("scrape/:countryCode")
   async scrapeCountry(@Param("countryCode") countryCode: string) {
-    const results = await this.visaService.scrapeCountry(countryCode.toUpperCase());
+    const results = await this.visaService.scrapeCountry(
+      countryCode.toUpperCase(),
+    );
     return {
       message: `Scraped visa information for ${countryCode.toUpperCase()}`,
       itemsScraped: results.length,

@@ -14,9 +14,10 @@ Backend API for CasaNova - an international mobility information aggregator that
 ## Tech Stack
 
 - **Framework**: [NestJS](https://nestjs.com/) with TypeScript
-- **Database**: SQLite via [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
+- **ORM**: [TypeORM](https://typeorm.io/) with full type safety
+- **Database**: SQLite (easily portable to PostgreSQL/MySQL)
 - **Web Scraping**: [Cheerio](https://cheerio.js.org/) + [Axios](https://axios-http.com/)
-- **Runtime**: Node.js 22+
+- **Runtime**: Node.js 22+ with ES Modules
 
 ## Getting Started
 
@@ -45,6 +46,9 @@ npm run dev
 | `npm start` | Start production server |
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm run typecheck` | Run TypeScript type checking |
+| `npm run migration:run` | Run database migrations |
+| `npm run migration:revert` | Revert last migration |
+| `npm run migration:show` | Show migration status |
 | `npm run scrape` | Scrape all data sources |
 | `npm run scrape:visa` | Scrape visa information only |
 | `npm run scrape:job` | Scrape job market info only |
@@ -129,8 +133,19 @@ src/
 ├── main.ts                 # Application entry point
 ├── app.module.ts           # Root NestJS module
 ├── app.controller.ts       # Root controller
+├── data-source.ts          # TypeORM configuration
+├── entities/               # TypeORM entity definitions
+│   ├── country.entity.ts
+│   ├── visa-info.entity.ts
+│   ├── job-info.entity.ts
+│   ├── housing-info.entity.ts
+│   ├── healthcare-info.entity.ts
+│   ├── banking-info.entity.ts
+│   └── scrape-log.entity.ts
+├── migrations/             # Database migrations
+│   └── 1704067200000-InitialSchema.ts
 ├── modules/
-│   ├── database/           # Database service (SQLite)
+│   ├── database/           # Database service (TypeORM)
 │   ├── visa/               # Visa module
 │   ├── job/                # Job market module
 │   ├── housing/            # Housing module
@@ -143,9 +158,31 @@ src/
 └── types/                  # TypeScript interfaces
 ```
 
+## Database
+
+The API uses **TypeORM** with SQLite for development, providing:
+- ✅ Full type safety with TypeScript
+- ✅ Migration system for schema versioning
+- ✅ Repository pattern for clean code
+- ✅ Easy to switch to PostgreSQL/MySQL for production
+
+### First-time Setup
+
+```bash
+# Run migrations to create tables and seed data
+npm run migration:run
+```
+
+This will:
+1. Create all database tables
+2. Seed 20 countries automatically
+3. Set up proper indexes and foreign keys
+
 ## Supported Countries
 
 Europe, North America, Oceania, Asia, Middle East, South America, and Africa - including France, Germany, Spain, UK, USA, Canada, Australia, Japan, UAE, Brazil, Morocco, and more.
+
+**Note**: All services are now using TypeORM repositories with full async/await support. See `TYPEORM_MIGRATION.md` for detailed migration documentation.
 
 ## Environment Variables
 

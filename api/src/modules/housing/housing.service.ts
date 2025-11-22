@@ -1,227 +1,320 @@
 import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, IsNull, Not, Like } from "typeorm";
 import type { CheerioAPI, Cheerio } from "cheerio";
 import { DatabaseService } from "../database/database.service.js";
+import { HousingInfo } from "../../entities/housing-info.entity.js";
+import { Country } from "../../entities/country.entity.js";
 import {
   fetchPage,
   extractText,
   cleanText,
   extractListItems,
 } from "../../scrapers/base-scraper.js";
-import type { Source, SourceMap, HousingInfo, RentalPlatform, ScrapeResult } from "../../types/index.js";
+import type {
+  Source,
+  SourceMap,
+  RentalPlatform,
+  ScrapeResult,
+} from "../../types/index.js";
 import housingSources from "../../sources/housing-sources.json" with { type: "json" };
 
 const sources: SourceMap = housingSources;
 
-interface HousingRow {
-  id: number;
-  country_code: string;
-  city: string | null;
-  category: string;
-  title: string;
-  description: string | null;
-  average_rent: string | null;
-  required_documents: string | null;
-  tips: string | null;
-  rental_platforms: string | null;
-  source_url: string | null;
-  source_name: string | null;
-  language: string;
-}
-
 @Injectable()
 export class HousingService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    @InjectRepository(HousingInfo)
+    private housingInfoRepository: Repository<HousingInfo>,
+    @InjectRepository(Country)
+    private countryRepository: Repository<Country>,
+    private readonly databaseService: DatabaseService,
+  ) {}
 
-  findAll(country?: string, city?: string, category?: string, language?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM housing_info WHERE 1=1";
-    const params: string[] = [];
+  async findAll(
+    country?: string,
+    city?: string,
+    category?: string,
+    language?: string,
+  ) {
+    const queryBuilder =
+      this.housingInfoRepository.createQueryBuilder("housing");
 
     if (country) {
-      query += " AND country_code = ?";
-      params.push(country.toUpperCase());
+      queryBuilder.andWhere("housing.country_code = :country", {
+        country: country.toUpperCase(),
+      });
     }
     if (city) {
-      query += " AND city LIKE ?";
-      params.push(`%${city}%`);
+      queryBuilder.andWhere("housing.city LIKE :city", {
+        city: `%${city}%`,
+      });
     }
     if (category) {
-      query += " AND category = ?";
-      params.push(category.toLowerCase());
+      queryBuilder.andWhere("housing.category = :category", {
+        category: category.toLowerCase(),
+      });
     }
     if (language) {
-      query += " AND language = ?";
-      params.push(language.toLowerCase());
+      queryBuilder.andWhere("housing.language = :language", {
+        language: language.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY updated_at DESC";
-    const results = db.prepare(query).all(...params) as HousingRow[];
+    queryBuilder.orderBy("housing.updated_at", "DESC");
+    const results = await queryBuilder.getMany();
 
     return results.map((r) => ({
       ...r,
-      required_documents: r.required_documents ? JSON.parse(r.required_documents) : null,
+      required_documents: r.required_documents
+        ? JSON.parse(r.required_documents)
+        : null,
       tips: r.tips ? JSON.parse(r.tips) : null,
-      rental_platforms: r.rental_platforms ? JSON.parse(r.rental_platforms) : null,
+      rental_platforms: r.rental_platforms
+        ? JSON.parse(r.rental_platforms)
+        : null,
     }));
   }
 
-  findCountries() {
-    const db = this.databaseService.getDb();
-    return db.prepare(`
-      SELECT DISTINCT c.code, c.name, c.name_fr, c.region,
-             COUNT(h.id) as housing_entries
-      FROM countries c
-      LEFT JOIN housing_info h ON c.code = h.country_code
-      GROUP BY c.code
-      ORDER BY c.name
-    `).all();
+  async findCountries() {
+    const results = await this.countryRepository
+      .createQueryBuilder("country")
+      .leftJoin("country.housing", "housing")
+      .select([
+        "country.code",
+        "country.name",
+        "country.name_fr",
+        "country.region",
+      ])
+      .addSelect("COUNT(housing.id)", "housing_entries")
+      .groupBy("country.code")
+      .addGroupBy("country.name")
+      .addGroupBy("country.name_fr")
+      .addGroupBy("country.region")
+      .orderBy("country.name", "ASC")
+      .getRawMany();
+
+    return results;
   }
 
-  findCities(country?: string) {
-    const db = this.databaseService.getDb();
-    let query = `
-      SELECT DISTINCT city, country_code, COUNT(*) as entries
-      FROM housing_info
-      WHERE city IS NOT NULL
-    `;
-    const params: string[] = [];
+  async findCities(country?: string) {
+    const queryBuilder = this.housingInfoRepository
+      .createQueryBuilder("housing")
+      .select("housing.city", "city")
+      .addSelect("housing.country_code", "country_code")
+      .addSelect("COUNT(*)", "entries")
+      .where("housing.city IS NOT NULL");
 
     if (country) {
-      query += " AND country_code = ?";
-      params.push(country.toUpperCase());
+      queryBuilder.andWhere("housing.country_code = :country", {
+        country: country.toUpperCase(),
+      });
     }
 
-    query += " GROUP BY city, country_code ORDER BY entries DESC";
-    return db.prepare(query).all(...params);
+    queryBuilder
+      .groupBy("housing.city")
+      .addGroupBy("housing.country_code")
+      .orderBy("entries", "DESC");
+
+    return await queryBuilder.getRawMany();
   }
 
-  findCategories() {
-    const db = this.databaseService.getDb();
-    return db.prepare(`
-      SELECT DISTINCT category, COUNT(*) as count
-      FROM housing_info
-      GROUP BY category
-      ORDER BY count DESC
-    `).all();
+  async findCategories() {
+    const results = await this.housingInfoRepository
+      .createQueryBuilder("housing")
+      .select("housing.category", "category")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("housing.category")
+      .orderBy("count", "DESC")
+      .getRawMany();
+
+    return results;
   }
 
-  findByCountry(countryCode: string, city?: string, category?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM housing_info WHERE country_code = ?";
-    const params: string[] = [countryCode.toUpperCase()];
+  async findByCountry(countryCode: string, city?: string, category?: string) {
+    const queryBuilder = this.housingInfoRepository
+      .createQueryBuilder("housing")
+      .where("housing.country_code = :countryCode", {
+        countryCode: countryCode.toUpperCase(),
+      });
 
     if (city) {
-      query += " AND city LIKE ?";
-      params.push(`%${city}%`);
+      queryBuilder.andWhere("housing.city LIKE :city", {
+        city: `%${city}%`,
+      });
     }
     if (category) {
-      query += " AND category = ?";
-      params.push(category.toLowerCase());
+      queryBuilder.andWhere("housing.category = :category", {
+        category: category.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY city, category, updated_at DESC";
-    const results = db.prepare(query).all(...params) as HousingRow[];
-    const country = db.prepare("SELECT * FROM countries WHERE code = ?").get(countryCode.toUpperCase());
+    queryBuilder
+      .orderBy("housing.city")
+      .addOrderBy("housing.category")
+      .addOrderBy("housing.updated_at", "DESC");
+
+    const results = await queryBuilder.getMany();
+
+    const country = await this.countryRepository.findOne({
+      where: { code: countryCode.toUpperCase() },
+    });
 
     return {
       country,
       data: results.map((r) => ({
         ...r,
-        required_documents: r.required_documents ? JSON.parse(r.required_documents) : null,
+        required_documents: r.required_documents
+          ? JSON.parse(r.required_documents)
+          : null,
         tips: r.tips ? JSON.parse(r.tips) : null,
-        rental_platforms: r.rental_platforms ? JSON.parse(r.rental_platforms) : null,
+        rental_platforms: r.rental_platforms
+          ? JSON.parse(r.rental_platforms)
+          : null,
       })),
     };
   }
 
-  findByCountryAndCity(countryCode: string, city: string) {
-    const db = this.databaseService.getDb();
-    const results = db.prepare(`
-      SELECT * FROM housing_info
-      WHERE country_code = ? AND city LIKE ?
-      ORDER BY category, updated_at DESC
-    `).all(countryCode.toUpperCase(), `%${city}%`) as HousingRow[];
+  async findByCountryAndCity(countryCode: string, city: string) {
+    const results = await this.housingInfoRepository.find({
+      where: {
+        country_code: countryCode.toUpperCase(),
+        city: Like(`%${city}%`),
+      },
+      order: {
+        category: "ASC",
+        updated_at: "DESC",
+      },
+    });
 
     return results.map((r) => ({
       ...r,
-      required_documents: r.required_documents ? JSON.parse(r.required_documents) : null,
+      required_documents: r.required_documents
+        ? JSON.parse(r.required_documents)
+        : null,
       tips: r.tips ? JSON.parse(r.tips) : null,
-      rental_platforms: r.rental_platforms ? JSON.parse(r.rental_platforms) : null,
+      rental_platforms: r.rental_platforms
+        ? JSON.parse(r.rental_platforms)
+        : null,
     }));
   }
 
   async scrapeCountry(countryCode: string): Promise<HousingInfo[]> {
-    const db = this.databaseService.getDb();
     const countrySources = sources[countryCode] || [];
     const results: HousingInfo[] = [];
 
     for (const source of countrySources) {
       try {
-        console.log(`[HousingScraper] Scraping ${source.name} for ${countryCode}...`);
+        console.log(
+          `[HousingScraper] Scraping ${source.name} for ${countryCode}...`,
+        );
         const data = await this.scrapeSource(source, countryCode);
         results.push(...data);
-        this.databaseService.logScrape(source.name, source.url, "success", data.length);
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "success",
+          data.length,
+        );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
         console.error(`[HousingScraper] Failed: ${message}`);
-        this.databaseService.logScrape(source.name, source.url, "error", 0, message);
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "error",
+          0,
+          message,
+        );
       }
     }
 
     for (const item of results) {
-      this.saveHousingInfo(db, item);
+      await this.saveHousingInfo(item);
     }
 
     return results;
   }
 
-  private async scrapeSource(source: Source, countryCode: string): Promise<HousingInfo[]> {
+  async scrapeAll(): Promise<ScrapeResult[]> {
+    const countries = await this.countryRepository.find({
+      select: ["code"],
+    });
+    const results: ScrapeResult[] = [];
+
+    for (const country of countries) {
+      try {
+        const data = await this.scrapeCountry(country.code);
+        results.push({ country: country.code, count: data.length });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error(
+          `Failed to scrape housing info for ${country.code}: ${message}`,
+        );
+      }
+    }
+
+    return results;
+  }
+
+  private async scrapeSource(
+    source: Source,
+    countryCode: string,
+  ): Promise<HousingInfo[]> {
     const { $, url } = await fetchPage(source.url);
     const results: HousingInfo[] = [];
 
-    $("article, .content-section, section, .card, .info-block").each((_, section) => {
-      const $section = $(section);
-      const title = extractText($section.find("h1, h2, h3, .title").first());
+    $("article, .content-section, section, .card, .info-block").each(
+      (_, section) => {
+        const $section = $(section);
+        const title = extractText($section.find("h1, h2, h3, .title").first());
 
-      if (title && this.isHousingRelated(title)) {
-        const description = extractText($section.find("p").first());
-        const tips = extractListItems($, "ul li, ol li");
+        if (title && this.isHousingRelated(title)) {
+          const description = extractText($section.find("p").first());
+          const tips = extractListItems($, "ul li, ol li");
 
-        results.push({
-          country_code: countryCode,
-          city: this.extractCity($section.text()),
-          category: this.inferCategory(title),
-          title,
-          description: cleanText(description),
-          average_rent: this.extractRent($section.text()),
-          required_documents: this.extractDocuments($section),
-          tips: tips.length > 0 ? JSON.stringify(tips) : null,
-          rental_platforms: this.extractPlatforms($section, $),
-          source_url: url,
-          source_name: source.name,
-          language: "en",
-        });
-      }
-    });
+          const housingInfo = new HousingInfo();
+          housingInfo.country_code = countryCode;
+          housingInfo.city = this.extractCity($section.text());
+          housingInfo.category = this.inferCategory(title);
+          housingInfo.title = title;
+          housingInfo.description = cleanText(description);
+          housingInfo.average_rent = this.extractRent($section.text());
+          housingInfo.required_documents = this.extractDocuments($section);
+          housingInfo.tips = tips.length > 0 ? JSON.stringify(tips) : null;
+          housingInfo.rental_platforms = this.extractPlatforms($section, $);
+          housingInfo.source_url = url;
+          housingInfo.source_name = source.name;
+          housingInfo.language = "en";
+
+          results.push(housingInfo);
+        }
+      },
+    );
 
     if (results.length === 0) {
       const pageTitle = extractText($("h1").first()) || extractText($("title"));
-      const pageDescription = extractText($('meta[name="description"]').attr("content") || "") || extractText($("p").first());
+      const pageDescription =
+        extractText($('meta[name="description"]').attr("content") || "") ||
+        extractText($("p").first());
 
-      results.push({
-        country_code: countryCode,
-        city: null,
-        category: "general",
-        title: pageTitle || `Housing Information for ${countryCode}`,
-        description: cleanText(pageDescription),
-        average_rent: null,
-        required_documents: null,
-        tips: null,
-        rental_platforms: null,
-        source_url: url,
-        source_name: source.name,
-        language: "en",
-      });
+      const housingInfo = new HousingInfo();
+      housingInfo.country_code = countryCode;
+      housingInfo.city = null;
+      housingInfo.category = "general";
+      housingInfo.title = pageTitle || `Housing Information for ${countryCode}`;
+      housingInfo.description = cleanText(pageDescription);
+      housingInfo.average_rent = null;
+      housingInfo.required_documents = null;
+      housingInfo.tips = null;
+      housingInfo.rental_platforms = null;
+      housingInfo.source_url = url;
+      housingInfo.source_name = source.name;
+      housingInfo.language = "en";
+
+      results.push(housingInfo);
     }
 
     return results;
@@ -229,7 +322,19 @@ export class HousingService {
 
   private isHousingRelated(text: string | null): boolean {
     if (!text) return false;
-    const keywords = ["housing", "rent", "apartment", "flat", "accommodation", "lease", "tenant", "landlord", "property", "home", "living"];
+    const keywords = [
+      "housing",
+      "rent",
+      "apartment",
+      "flat",
+      "accommodation",
+      "lease",
+      "tenant",
+      "landlord",
+      "property",
+      "home",
+      "living",
+    ];
     return keywords.some((kw) => text.toLowerCase().includes(kw));
   }
 
@@ -237,21 +342,43 @@ export class HousingService {
     if (!text) return "general";
     const lowerText = text.toLowerCase();
     if (lowerText.includes("rent")) return "rental";
-    if (lowerText.includes("buy") || lowerText.includes("purchase")) return "buying";
+    if (lowerText.includes("buy") || lowerText.includes("purchase"))
+      return "buying";
     if (lowerText.includes("student")) return "student";
-    if (lowerText.includes("temporary") || lowerText.includes("short")) return "temporary";
+    if (lowerText.includes("temporary") || lowerText.includes("short"))
+      return "temporary";
     if (lowerText.includes("social")) return "social_housing";
-    if (lowerText.includes("right") || lowerText.includes("law")) return "rights";
+    if (lowerText.includes("right") || lowerText.includes("law"))
+      return "rights";
     return "general";
   }
 
   private extractCity(text: string | null): string | null {
     if (!text) return null;
     const majorCities = [
-      "Paris", "Lyon", "Marseille", "Berlin", "Munich", "Frankfurt", "Hamburg",
-      "Madrid", "Barcelona", "Amsterdam", "Rotterdam", "London", "Manchester",
-      "Toronto", "Vancouver", "Montreal", "Sydney", "Melbourne", "New York",
-      "Los Angeles", "Tokyo", "Singapore", "Dubai",
+      "Paris",
+      "Lyon",
+      "Marseille",
+      "Berlin",
+      "Munich",
+      "Frankfurt",
+      "Hamburg",
+      "Madrid",
+      "Barcelona",
+      "Amsterdam",
+      "Rotterdam",
+      "London",
+      "Manchester",
+      "Toronto",
+      "Vancouver",
+      "Montreal",
+      "Sydney",
+      "Melbourne",
+      "New York",
+      "Los Angeles",
+      "Tokyo",
+      "Singapore",
+      "Dubai",
     ];
     for (const city of majorCities) {
       if (text.includes(city)) return city;
@@ -275,7 +402,17 @@ export class HousingService {
 
   private extractDocuments($section: Cheerio<any>): string | null {
     const documents: string[] = [];
-    const documentKeywords = ["passport", "id", "proof of income", "bank statement", "employment contract", "references", "deposit", "guarantor", "visa"];
+    const documentKeywords = [
+      "passport",
+      "id",
+      "proof of income",
+      "bank statement",
+      "employment contract",
+      "references",
+      "deposit",
+      "guarantor",
+      "visa",
+    ];
     const text = $section.text().toLowerCase();
     for (const doc of documentKeywords) {
       if (text.includes(doc)) documents.push(doc);
@@ -283,7 +420,10 @@ export class HousingService {
     return documents.length > 0 ? JSON.stringify(documents) : null;
   }
 
-  private extractPlatforms($section: Cheerio<any>, $: CheerioAPI): string | null {
+  private extractPlatforms(
+    $section: Cheerio<any>,
+    $: CheerioAPI,
+  ): string | null {
     const platforms: RentalPlatform[] = [];
     $section.find("a").each((_: number, el: any) => {
       const href = $(el).attr("href");
@@ -295,11 +435,7 @@ export class HousingService {
     return platforms.length > 0 ? JSON.stringify(platforms) : null;
   }
 
-  private saveHousingInfo(db: ReturnType<DatabaseService["getDb"]>, item: HousingInfo): void {
-    const stmt = db.prepare(`
-      INSERT INTO housing_info (country_code, city, category, title, description, average_rent, required_documents, tips, rental_platforms, source_url, source_name, language)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(item.country_code, item.city, item.category, item.title, item.description, item.average_rent, item.required_documents, item.tips, item.rental_platforms, item.source_url, item.source_name, item.language);
+  private async saveHousingInfo(item: HousingInfo): Promise<void> {
+    await this.housingInfoRepository.save(item);
   }
 }

@@ -1,4 +1,7 @@
 import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { DatabaseModule } from "./modules/database/database.module.js";
 import { VisaModule } from "./modules/visa/visa.module.js";
 import { JobModule } from "./modules/job/job.module.js";
@@ -7,9 +10,37 @@ import { HealthcareModule } from "./modules/healthcare/healthcare.module.js";
 import { BankingModule } from "./modules/banking/banking.module.js";
 import { CountriesModule } from "./modules/countries/countries.module.js";
 import { AppController } from "./app.controller.js";
+import {
+  Country,
+  VisaInfo,
+  JobInfo,
+  HousingInfo,
+  HealthcareInfo,
+  BankingInfo,
+  ScrapeLog,
+} from "./entities/index.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 @Module({
   imports: [
+    TypeOrmModule.forRoot({
+      type: "sqlite",
+      database: join(__dirname, "../data/casanova.db"),
+      synchronize: false,
+      logging: process.env.NODE_ENV === "development",
+      entities: [
+        Country,
+        VisaInfo,
+        JobInfo,
+        HousingInfo,
+        HealthcareInfo,
+        BankingInfo,
+        ScrapeLog,
+      ],
+      migrations: [join(__dirname, "migrations/*.js")],
+    }),
     DatabaseModule,
     VisaModule,
     JobModule,

@@ -1,179 +1,249 @@
 import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 import type { CheerioAPI, Cheerio } from "cheerio";
 import { DatabaseService } from "../database/database.service.js";
+import { BankingInfo } from "../../entities/banking-info.entity.js";
+import { Country } from "../../entities/country.entity.js";
 import {
   fetchPage,
   extractText,
   cleanText,
   extractListItems,
 } from "../../scrapers/base-scraper.js";
-import type { Source, SourceMap, BankingInfo, ScrapeResult } from "../../types/index.js";
+import type { Source, SourceMap, ScrapeResult } from "../../types/index.js";
 import bankingSources from "../../sources/banking-sources.json" with { type: "json" };
 
 const sources: SourceMap = bankingSources;
 
-interface BankingRow {
-  id: number;
-  country_code: string;
-  category: string;
-  title: string;
-  description: string | null;
-  account_requirements: string | null;
-  recommended_banks: string | null;
-  tips: string | null;
-  source_url: string | null;
-  source_name: string | null;
-  language: string;
-}
-
 @Injectable()
 export class BankingService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    @InjectRepository(BankingInfo)
+    private bankingInfoRepository: Repository<BankingInfo>,
+    @InjectRepository(Country)
+    private countryRepository: Repository<Country>,
+    private readonly databaseService: DatabaseService,
+  ) {}
 
-  findAll(country?: string, category?: string, language?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM banking_info WHERE 1=1";
-    const params: string[] = [];
+  async findAll(country?: string, category?: string, language?: string) {
+    const queryBuilder =
+      this.bankingInfoRepository.createQueryBuilder("banking");
 
     if (country) {
-      query += " AND country_code = ?";
-      params.push(country.toUpperCase());
+      queryBuilder.andWhere("banking.country_code = :country", {
+        country: country.toUpperCase(),
+      });
     }
     if (category) {
-      query += " AND category = ?";
-      params.push(category.toLowerCase());
+      queryBuilder.andWhere("banking.category = :category", {
+        category: category.toLowerCase(),
+      });
     }
     if (language) {
-      query += " AND language = ?";
-      params.push(language.toLowerCase());
+      queryBuilder.andWhere("banking.language = :language", {
+        language: language.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY updated_at DESC";
-    const results = db.prepare(query).all(...params) as BankingRow[];
+    queryBuilder.orderBy("banking.updated_at", "DESC");
+    const results = await queryBuilder.getMany();
 
     return results.map((r) => ({
       ...r,
-      account_requirements: r.account_requirements ? JSON.parse(r.account_requirements) : null,
-      recommended_banks: r.recommended_banks ? JSON.parse(r.recommended_banks) : null,
+      account_requirements: r.account_requirements
+        ? JSON.parse(r.account_requirements)
+        : null,
+      recommended_banks: r.recommended_banks
+        ? JSON.parse(r.recommended_banks)
+        : null,
       tips: r.tips ? JSON.parse(r.tips) : null,
     }));
   }
 
-  findCountries() {
-    const db = this.databaseService.getDb();
-    return db.prepare(`
-      SELECT DISTINCT c.code, c.name, c.name_fr, c.region,
-             COUNT(b.id) as banking_entries
-      FROM countries c
-      LEFT JOIN banking_info b ON c.code = b.country_code
-      GROUP BY c.code
-      ORDER BY c.name
-    `).all();
+  async findCountries() {
+    const results = await this.countryRepository
+      .createQueryBuilder("country")
+      .leftJoin("country.banking", "banking")
+      .select([
+        "country.code",
+        "country.name",
+        "country.name_fr",
+        "country.region",
+      ])
+      .addSelect("COUNT(banking.id)", "banking_entries")
+      .groupBy("country.code")
+      .addGroupBy("country.name")
+      .addGroupBy("country.name_fr")
+      .addGroupBy("country.region")
+      .orderBy("country.name", "ASC")
+      .getRawMany();
+
+    return results;
   }
 
-  findCategories() {
-    const db = this.databaseService.getDb();
-    return db.prepare(`
-      SELECT DISTINCT category, COUNT(*) as count
-      FROM banking_info
-      GROUP BY category
-      ORDER BY count DESC
-    `).all();
+  async findCategories() {
+    const results = await this.bankingInfoRepository
+      .createQueryBuilder("banking")
+      .select("banking.category", "category")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("banking.category")
+      .orderBy("count", "DESC")
+      .getRawMany();
+
+    return results;
   }
 
-  findByCountry(countryCode: string, category?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM banking_info WHERE country_code = ?";
-    const params: string[] = [countryCode.toUpperCase()];
+  async findByCountry(countryCode: string, category?: string) {
+    const queryBuilder = this.bankingInfoRepository
+      .createQueryBuilder("banking")
+      .where("banking.country_code = :countryCode", {
+        countryCode: countryCode.toUpperCase(),
+      });
 
     if (category) {
-      query += " AND category = ?";
-      params.push(category.toLowerCase());
+      queryBuilder.andWhere("banking.category = :category", {
+        category: category.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY category, updated_at DESC";
-    const results = db.prepare(query).all(...params) as BankingRow[];
-    const country = db.prepare("SELECT * FROM countries WHERE code = ?").get(countryCode.toUpperCase());
+    queryBuilder
+      .orderBy("banking.category")
+      .addOrderBy("banking.updated_at", "DESC");
+
+    const results = await queryBuilder.getMany();
+
+    const country = await this.countryRepository.findOne({
+      where: { code: countryCode.toUpperCase() },
+    });
 
     return {
       country,
       data: results.map((r) => ({
         ...r,
-        account_requirements: r.account_requirements ? JSON.parse(r.account_requirements) : null,
-        recommended_banks: r.recommended_banks ? JSON.parse(r.recommended_banks) : null,
+        account_requirements: r.account_requirements
+          ? JSON.parse(r.account_requirements)
+          : null,
+        recommended_banks: r.recommended_banks
+          ? JSON.parse(r.recommended_banks)
+          : null,
         tips: r.tips ? JSON.parse(r.tips) : null,
       })),
     };
   }
 
   async scrapeCountry(countryCode: string): Promise<BankingInfo[]> {
-    const db = this.databaseService.getDb();
     const countrySources = sources[countryCode] || [];
     const results: BankingInfo[] = [];
 
     for (const source of countrySources) {
       try {
-        console.log(`[BankingScraper] Scraping ${source.name} for ${countryCode}...`);
+        console.log(
+          `[BankingScraper] Scraping ${source.name} for ${countryCode}...`,
+        );
         const data = await this.scrapeSource(source, countryCode);
         results.push(...data);
-        this.databaseService.logScrape(source.name, source.url, "success", data.length);
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "success",
+          data.length,
+        );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
         console.error(`[BankingScraper] Failed: ${message}`);
-        this.databaseService.logScrape(source.name, source.url, "error", 0, message);
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "error",
+          0,
+          message,
+        );
       }
     }
 
     for (const item of results) {
-      this.saveBankingInfo(db, item);
+      await this.saveBankingInfo(item);
     }
 
     return results;
   }
 
-  private async scrapeSource(source: Source, countryCode: string): Promise<BankingInfo[]> {
+  async scrapeAll(): Promise<ScrapeResult[]> {
+    const countries = await this.countryRepository.find({
+      select: ["code"],
+    });
+    const results: ScrapeResult[] = [];
+
+    for (const country of countries) {
+      try {
+        const data = await this.scrapeCountry(country.code);
+        results.push({ country: country.code, count: data.length });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error(
+          `Failed to scrape banking info for ${country.code}: ${message}`,
+        );
+      }
+    }
+
+    return results;
+  }
+
+  private async scrapeSource(
+    source: Source,
+    countryCode: string,
+  ): Promise<BankingInfo[]> {
     const { $, url } = await fetchPage(source.url);
     const results: BankingInfo[] = [];
 
-    $("article, .content-section, section, .card, .info-block").each((_, section) => {
-      const $section = $(section);
-      const title = extractText($section.find("h1, h2, h3, .title").first());
+    $("article, .content-section, section, .card, .info-block").each(
+      (_, section) => {
+        const $section = $(section);
+        const title = extractText($section.find("h1, h2, h3, .title").first());
 
-      if (title && this.isBankingRelated(title)) {
-        const description = extractText($section.find("p").first());
-        const tips = extractListItems($, "ul li, ol li");
+        if (title && this.isBankingRelated(title)) {
+          const description = extractText($section.find("p").first());
+          const tips = extractListItems($, "ul li, ol li");
 
-        results.push({
-          country_code: countryCode,
-          category: this.inferCategory(title),
-          title,
-          description: cleanText(description),
-          account_requirements: this.extractRequirements($section),
-          recommended_banks: this.extractBanks($section),
-          tips: tips.length > 0 ? JSON.stringify(tips) : null,
-          source_url: url,
-          source_name: source.name,
-          language: "en",
-        });
-      }
-    });
+          const bankingInfo = new BankingInfo();
+          bankingInfo.country_code = countryCode;
+          bankingInfo.category = this.inferCategory(title);
+          bankingInfo.title = title;
+          bankingInfo.description = cleanText(description);
+          bankingInfo.account_requirements = this.extractRequirements($section);
+          bankingInfo.recommended_banks = this.extractBanks($section);
+          bankingInfo.tips = tips.length > 0 ? JSON.stringify(tips) : null;
+          bankingInfo.source_url = url;
+          bankingInfo.source_name = source.name;
+          bankingInfo.language = "en";
+
+          results.push(bankingInfo);
+        }
+      },
+    );
 
     if (results.length === 0) {
       const pageTitle = extractText($("h1").first()) || extractText($("title"));
-      const pageDescription = extractText($('meta[name="description"]').attr("content") || "") || extractText($("p").first());
+      const pageDescription =
+        extractText($('meta[name="description"]').attr("content") || "") ||
+        extractText($("p").first());
 
-      results.push({
-        country_code: countryCode,
-        category: "general",
-        title: pageTitle || `Banking Information for ${countryCode}`,
-        description: cleanText(pageDescription),
-        account_requirements: null,
-        recommended_banks: null,
-        tips: null,
-        source_url: url,
-        source_name: source.name,
-        language: "en",
-      });
+      const bankingInfo = new BankingInfo();
+      bankingInfo.country_code = countryCode;
+      bankingInfo.category = "general";
+      bankingInfo.title = pageTitle || `Banking Information for ${countryCode}`;
+      bankingInfo.description = cleanText(pageDescription);
+      bankingInfo.account_requirements = null;
+      bankingInfo.recommended_banks = null;
+      bankingInfo.tips = null;
+      bankingInfo.source_url = url;
+      bankingInfo.source_name = source.name;
+      bankingInfo.language = "en";
+
+      results.push(bankingInfo);
     }
 
     return results;
@@ -181,7 +251,17 @@ export class BankingService {
 
   private isBankingRelated(text: string | null): boolean {
     if (!text) return false;
-    const keywords = ["bank", "account", "finance", "money", "transfer", "payment", "credit", "debit", "savings"];
+    const keywords = [
+      "bank",
+      "account",
+      "finance",
+      "money",
+      "transfer",
+      "payment",
+      "credit",
+      "debit",
+      "savings",
+    ];
     return keywords.some((kw) => text.toLowerCase().includes(kw));
   }
 
@@ -199,7 +279,15 @@ export class BankingService {
 
   private extractRequirements($section: Cheerio<any>): string | null {
     const requirements: string[] = [];
-    const reqKeywords = ["passport", "id", "proof of address", "proof of income", "residence permit", "tax number", "social security"];
+    const reqKeywords = [
+      "passport",
+      "id",
+      "proof of address",
+      "proof of income",
+      "residence permit",
+      "tax number",
+      "social security",
+    ];
     const text = $section.text().toLowerCase();
     for (const req of reqKeywords) {
       if (text.includes(req)) requirements.push(req);
@@ -210,10 +298,27 @@ export class BankingService {
   private extractBanks($section: Cheerio<any>): string | null {
     const banks: string[] = [];
     const knownBanks = [
-      "BNP Paribas", "Societe Generale", "Credit Agricole", "HSBC", "Deutsche Bank",
-      "Commerzbank", "ING", "Santander", "BBVA", "Barclays", "Lloyds", "NatWest",
-      "TD Bank", "RBC", "Scotiabank", "Commonwealth Bank", "Westpac", "ANZ", "NAB",
-      "N26", "Revolut",
+      "BNP Paribas",
+      "Societe Generale",
+      "Credit Agricole",
+      "HSBC",
+      "Deutsche Bank",
+      "Commerzbank",
+      "ING",
+      "Santander",
+      "BBVA",
+      "Barclays",
+      "Lloyds",
+      "NatWest",
+      "TD Bank",
+      "RBC",
+      "Scotiabank",
+      "Commonwealth Bank",
+      "Westpac",
+      "ANZ",
+      "NAB",
+      "N26",
+      "Revolut",
     ];
     const text = $section.text();
     for (const bank of knownBanks) {
@@ -222,11 +327,7 @@ export class BankingService {
     return banks.length > 0 ? JSON.stringify(banks) : null;
   }
 
-  private saveBankingInfo(db: ReturnType<DatabaseService["getDb"]>, item: BankingInfo): void {
-    const stmt = db.prepare(`
-      INSERT INTO banking_info (country_code, category, title, description, account_requirements, recommended_banks, tips, source_url, source_name, language)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(item.country_code, item.category, item.title, item.description, item.account_requirements, item.recommended_banks, item.tips, item.source_url, item.source_name, item.language);
+  private async saveBankingInfo(item: BankingInfo): Promise<void> {
+    await this.bankingInfoRepository.save(item);
   }
 }

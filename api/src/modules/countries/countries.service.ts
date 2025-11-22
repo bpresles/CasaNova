@@ -1,67 +1,82 @@
 import { Injectable } from "@nestjs/common";
-import { DatabaseService } from "../database/database.service.js";
-
-export interface CountryRow {
-  id: number;
-  code: string;
-  name: string;
-  name_fr: string | null;
-  region: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface CountRow {
-  count: number;
-}
-
-interface HealthcareSummaryRow {
-  title: string;
-  category: string;
-  emergency_numbers: string | null;
-}
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Country } from "../../entities/country.entity.js";
+import { VisaInfo } from "../../entities/visa-info.entity.js";
+import { JobInfo } from "../../entities/job-info.entity.js";
+import { HousingInfo } from "../../entities/housing-info.entity.js";
+import { HealthcareInfo } from "../../entities/healthcare-info.entity.js";
+import { BankingInfo } from "../../entities/banking-info.entity.js";
 
 @Injectable()
 export class CountriesService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    @InjectRepository(Country)
+    private countryRepository: Repository<Country>,
+    @InjectRepository(VisaInfo)
+    private visaInfoRepository: Repository<VisaInfo>,
+    @InjectRepository(JobInfo)
+    private jobInfoRepository: Repository<JobInfo>,
+    @InjectRepository(HousingInfo)
+    private housingInfoRepository: Repository<HousingInfo>,
+    @InjectRepository(HealthcareInfo)
+    private healthcareInfoRepository: Repository<HealthcareInfo>,
+    @InjectRepository(BankingInfo)
+    private bankingInfoRepository: Repository<BankingInfo>,
+  ) {}
 
-  findAll(region?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM countries WHERE 1=1";
-    const params: string[] = [];
+  async findAll(region?: string) {
+    const queryBuilder = this.countryRepository.createQueryBuilder("country");
 
     if (region) {
-      query += " AND region = ?";
-      params.push(region);
+      queryBuilder.where("country.region = :region", { region });
     }
 
-    query += " ORDER BY name";
-    return db.prepare(query).all(...params);
+    queryBuilder.orderBy("country.name", "ASC");
+    return await queryBuilder.getMany();
   }
 
-  findRegions() {
-    const db = this.databaseService.getDb();
-    return db.prepare(`
-      SELECT DISTINCT region, COUNT(*) as country_count
-      FROM countries
-      WHERE region IS NOT NULL
-      GROUP BY region
-      ORDER BY region
-    `).all();
+  async findRegions() {
+    const results = await this.countryRepository
+      .createQueryBuilder("country")
+      .select("country.region", "region")
+      .addSelect("COUNT(*)", "country_count")
+      .where("country.region IS NOT NULL")
+      .groupBy("country.region")
+      .orderBy("country.region", "ASC")
+      .getRawMany();
+
+    return results;
   }
 
-  findByCode(code: string) {
-    const db = this.databaseService.getDb();
+  async findByCode(code: string) {
     const countryCode = code.toUpperCase();
 
-    const country = db.prepare("SELECT * FROM countries WHERE code = ?").get(countryCode) as CountryRow | undefined;
+    const country = await this.countryRepository.findOne({
+      where: { code: countryCode },
+    });
+
     if (!country) return null;
 
-    const visaCount = (db.prepare("SELECT COUNT(*) as count FROM visa_info WHERE country_code = ?").get(countryCode) as CountRow).count;
-    const jobCount = (db.prepare("SELECT COUNT(*) as count FROM job_info WHERE country_code = ?").get(countryCode) as CountRow).count;
-    const housingCount = (db.prepare("SELECT COUNT(*) as count FROM housing_info WHERE country_code = ?").get(countryCode) as CountRow).count;
-    const healthcareCount = (db.prepare("SELECT COUNT(*) as count FROM healthcare_info WHERE country_code = ?").get(countryCode) as CountRow).count;
-    const bankingCount = (db.prepare("SELECT COUNT(*) as count FROM banking_info WHERE country_code = ?").get(countryCode) as CountRow).count;
+    const visaCount = await this.visaInfoRepository.count({
+      where: { country_code: countryCode },
+    });
+
+    const jobCount = await this.jobInfoRepository.count({
+      where: { country_code: countryCode },
+    });
+
+    const housingCount = await this.housingInfoRepository.count({
+      where: { country_code: countryCode },
+    });
+
+    const healthcareCount = await this.healthcareInfoRepository.count({
+      where: { country_code: countryCode },
+    });
+
+    const bankingCount = await this.bankingInfoRepository.count({
+      where: { country_code: countryCode },
+    });
 
     return {
       ...country,
@@ -82,37 +97,49 @@ export class CountriesService {
     };
   }
 
-  findSummary(code: string) {
-    const db = this.databaseService.getDb();
+  async findSummary(code: string) {
     const countryCode = code.toUpperCase();
 
-    const country = db.prepare("SELECT * FROM countries WHERE code = ?").get(countryCode) as CountryRow | undefined;
+    const country = await this.countryRepository.findOne({
+      where: { code: countryCode },
+    });
+
     if (!country) return null;
 
-    const latestVisa = db.prepare(`
-      SELECT title, visa_type, description FROM visa_info
-      WHERE country_code = ? ORDER BY updated_at DESC LIMIT 3
-    `).all(countryCode);
+    const latestVisa = await this.visaInfoRepository.find({
+      where: { country_code: countryCode },
+      select: ["title", "visa_type", "description"],
+      order: { updated_at: "DESC" },
+      take: 3,
+    });
 
-    const latestJob = db.prepare(`
-      SELECT title, category, description FROM job_info
-      WHERE country_code = ? ORDER BY updated_at DESC LIMIT 3
-    `).all(countryCode);
+    const latestJob = await this.jobInfoRepository.find({
+      where: { country_code: countryCode },
+      select: ["title", "category", "description"],
+      order: { updated_at: "DESC" },
+      take: 3,
+    });
 
-    const latestHousing = db.prepare(`
-      SELECT title, category, city, description FROM housing_info
-      WHERE country_code = ? ORDER BY updated_at DESC LIMIT 3
-    `).all(countryCode);
+    const latestHousing = await this.housingInfoRepository.find({
+      where: { country_code: countryCode },
+      select: ["title", "category", "city", "description"],
+      order: { updated_at: "DESC" },
+      take: 3,
+    });
 
-    const latestHealthcare = db.prepare(`
-      SELECT title, category, emergency_numbers FROM healthcare_info
-      WHERE country_code = ? ORDER BY updated_at DESC LIMIT 3
-    `).all(countryCode) as HealthcareSummaryRow[];
+    const latestHealthcare = await this.healthcareInfoRepository.find({
+      where: { country_code: countryCode },
+      select: ["title", "category", "emergency_numbers"],
+      order: { updated_at: "DESC" },
+      take: 3,
+    });
 
-    const latestBanking = db.prepare(`
-      SELECT title, category, description FROM banking_info
-      WHERE country_code = ? ORDER BY updated_at DESC LIMIT 3
-    `).all(countryCode);
+    const latestBanking = await this.bankingInfoRepository.find({
+      where: { country_code: countryCode },
+      select: ["title", "category", "description"],
+      order: { updated_at: "DESC" },
+      take: 3,
+    });
 
     return {
       country,
@@ -122,7 +149,9 @@ export class CountriesService {
         housing: latestHousing,
         healthcare: latestHealthcare.map((h) => ({
           ...h,
-          emergency_numbers: h.emergency_numbers ? JSON.parse(h.emergency_numbers) : null,
+          emergency_numbers: h.emergency_numbers
+            ? JSON.parse(h.emergency_numbers)
+            : null,
         })),
         banking: latestBanking,
       },

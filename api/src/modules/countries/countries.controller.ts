@@ -6,20 +6,20 @@ export class CountriesController {
   constructor(private readonly countriesService: CountriesService) {}
 
   @Get()
-  findAll(@Query("region") region?: string) {
-    const data = this.countriesService.findAll(region);
+  async findAll(@Query("region") region?: string) {
+    const data = await this.countriesService.findAll(region);
     return { count: data.length, data };
   }
 
   @Get("regions")
-  findRegions() {
-    const data = this.countriesService.findRegions();
+  async findRegions() {
+    const data = await this.countriesService.findRegions();
     return { data };
   }
 
   @Get(":code")
-  findByCode(@Param("code") code: string) {
-    const result = this.countriesService.findByCode(code);
+  async findByCode(@Param("code") code: string) {
+    const result = await this.countriesService.findByCode(code);
     if (!result) {
       return {
         error: "Country not found",
@@ -30,8 +30,8 @@ export class CountriesController {
   }
 
   @Get(":code/summary")
-  findSummary(@Param("code") code: string) {
-    const result = this.countriesService.findSummary(code);
+  async findSummary(@Param("code") code: string) {
+    const result = await this.countriesService.findSummary(code);
     if (!result) {
       return {
         error: "Country not found",

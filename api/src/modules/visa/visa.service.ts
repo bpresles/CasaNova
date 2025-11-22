@@ -1,58 +1,52 @@
 import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 import type { CheerioAPI, Cheerio } from "cheerio";
 import { DatabaseService } from "../database/database.service.js";
+import { VisaInfo } from "../../entities/visa-info.entity.js";
+import { Country } from "../../entities/country.entity.js";
 import {
   fetchPage,
   extractText,
   cleanText,
   extractListItems,
 } from "../../scrapers/base-scraper.js";
-import type { Source, SourceMap, VisaInfo, ScrapeResult } from "../../types/index.js";
+import type { Source, SourceMap, ScrapeResult } from "../../types/index.js";
 import visaSources from "../../sources/visa-sources.json" with { type: "json" };
 
 const sources: SourceMap = visaSources;
 
-interface VisaRow {
-  id: number;
-  country_code: string;
-  visa_type: string;
-  title: string;
-  description: string | null;
-  requirements: string | null;
-  processing_time: string | null;
-  cost: string | null;
-  validity: string | null;
-  source_url: string | null;
-  source_name: string | null;
-  language: string;
-  created_at: string;
-  updated_at: string;
-}
-
 @Injectable()
 export class VisaService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    @InjectRepository(VisaInfo)
+    private visaInfoRepository: Repository<VisaInfo>,
+    @InjectRepository(Country)
+    private countryRepository: Repository<Country>,
+    private readonly databaseService: DatabaseService,
+  ) {}
 
-  findAll(country?: string, type?: string, language?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM visa_info WHERE 1=1";
-    const params: string[] = [];
+  async findAll(country?: string, type?: string, language?: string) {
+    const queryBuilder = this.visaInfoRepository.createQueryBuilder("visa");
 
     if (country) {
-      query += " AND country_code = ?";
-      params.push(country.toUpperCase());
+      queryBuilder.andWhere("visa.country_code = :country", {
+        country: country.toUpperCase(),
+      });
     }
     if (type) {
-      query += " AND visa_type = ?";
-      params.push(type.toLowerCase());
+      queryBuilder.andWhere("visa.visa_type = :type", {
+        type: type.toLowerCase(),
+      });
     }
     if (language) {
-      query += " AND language = ?";
-      params.push(language.toLowerCase());
+      queryBuilder.andWhere("visa.language = :language", {
+        language: language.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY updated_at DESC";
-    const results = db.prepare(query).all(...params) as VisaRow[];
+    queryBuilder.orderBy("visa.updated_at", "DESC");
+    const results = await queryBuilder.getMany();
 
     return results.map((r) => ({
       ...r,
@@ -60,52 +54,60 @@ export class VisaService {
     }));
   }
 
-  findCountries() {
-    const db = this.databaseService.getDb();
-    return db
-      .prepare(
-        `
-      SELECT DISTINCT c.code, c.name, c.name_fr, c.region,
-             COUNT(v.id) as visa_entries
-      FROM countries c
-      LEFT JOIN visa_info v ON c.code = v.country_code
-      GROUP BY c.code
-      ORDER BY c.name
-    `
-      )
-      .all();
+  async findCountries() {
+    const results = await this.countryRepository
+      .createQueryBuilder("country")
+      .leftJoin("country.visas", "visa")
+      .select([
+        "country.code",
+        "country.name",
+        "country.name_fr",
+        "country.region",
+      ])
+      .addSelect("COUNT(visa.id)", "visa_entries")
+      .groupBy("country.code")
+      .addGroupBy("country.name")
+      .addGroupBy("country.name_fr")
+      .addGroupBy("country.region")
+      .orderBy("country.name", "ASC")
+      .getRawMany();
+
+    return results;
   }
 
-  findTypes() {
-    const db = this.databaseService.getDb();
-    return db
-      .prepare(
-        `
-      SELECT DISTINCT visa_type, COUNT(*) as count
-      FROM visa_info
-      GROUP BY visa_type
-      ORDER BY count DESC
-    `
-      )
-      .all();
+  async findTypes() {
+    const results = await this.visaInfoRepository
+      .createQueryBuilder("visa")
+      .select("visa.visa_type", "visa_type")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("visa.visa_type")
+      .orderBy("count", "DESC")
+      .getRawMany();
+
+    return results;
   }
 
-  findByCountry(countryCode: string, type?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM visa_info WHERE country_code = ?";
-    const params: string[] = [countryCode.toUpperCase()];
+  async findByCountry(countryCode: string, type?: string) {
+    const queryBuilder = this.visaInfoRepository
+      .createQueryBuilder("visa")
+      .where("visa.country_code = :countryCode", {
+        countryCode: countryCode.toUpperCase(),
+      });
 
     if (type) {
-      query += " AND visa_type = ?";
-      params.push(type.toLowerCase());
+      queryBuilder.andWhere("visa.visa_type = :type", {
+        type: type.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY visa_type, updated_at DESC";
-    const results = db.prepare(query).all(...params) as VisaRow[];
+    queryBuilder
+      .orderBy("visa.visa_type")
+      .addOrderBy("visa.updated_at", "DESC");
+    const results = await queryBuilder.getMany();
 
-    const country = db
-      .prepare("SELECT * FROM countries WHERE code = ?")
-      .get(countryCode.toUpperCase());
+    const country = await this.countryRepository.findOne({
+      where: { code: countryCode.toUpperCase() },
+    });
 
     return {
       country,
@@ -116,17 +118,16 @@ export class VisaService {
     };
   }
 
-  findByCountryAndType(countryCode: string, visaType: string) {
-    const db = this.databaseService.getDb();
-    const results = db
-      .prepare(
-        `
-      SELECT * FROM visa_info
-      WHERE country_code = ? AND visa_type = ?
-      ORDER BY updated_at DESC
-    `
-      )
-      .all(countryCode.toUpperCase(), visaType.toLowerCase()) as VisaRow[];
+  async findByCountryAndType(countryCode: string, visaType: string) {
+    const results = await this.visaInfoRepository.find({
+      where: {
+        country_code: countryCode.toUpperCase(),
+        visa_type: visaType.toLowerCase(),
+      },
+      order: {
+        updated_at: "DESC",
+      },
+    });
 
     return results.map((r) => ({
       ...r,
@@ -135,33 +136,49 @@ export class VisaService {
   }
 
   async scrapeCountry(countryCode: string): Promise<VisaInfo[]> {
-    const db = this.databaseService.getDb();
     const countrySources = this.getSourcesForCountry(countryCode);
     const results: VisaInfo[] = [];
 
     for (const source of countrySources) {
       try {
-        console.log(`[VisaScraper] Scraping ${source.name} for ${countryCode}...`);
+        console.log(
+          `[VisaScraper] Scraping ${source.name} for ${countryCode}...`,
+        );
         const data = await this.scrapeSource(source, countryCode);
         results.push(...data);
-        this.databaseService.logScrape(source.name, source.url, "success", data.length);
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "success",
+          data.length,
+        );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        console.error(`[VisaScraper] Failed to scrape ${source.name}: ${message}`);
-        this.databaseService.logScrape(source.name, source.url, "error", 0, message);
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error(
+          `[VisaScraper] Failed to scrape ${source.name}: ${message}`,
+        );
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "error",
+          0,
+          message,
+        );
       }
     }
 
     for (const item of results) {
-      this.saveVisaInfo(db, item);
+      await this.saveVisaInfo(item);
     }
 
     return results;
   }
 
   async scrapeAll(): Promise<ScrapeResult[]> {
-    const db = this.databaseService.getDb();
-    const countries = db.prepare("SELECT code FROM countries").all() as { code: string }[];
+    const countries = await this.countryRepository.find({
+      select: ["code"],
+    });
     const results: ScrapeResult[] = [];
 
     for (const country of countries) {
@@ -169,8 +186,11 @@ export class VisaService {
         const data = await this.scrapeCountry(country.code);
         results.push({ country: country.code, count: data.length });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        console.error(`Failed to scrape visa info for ${country.code}: ${message}`);
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error(
+          `Failed to scrape visa info for ${country.code}: ${message}`,
+        );
       }
     }
 
@@ -181,7 +201,10 @@ export class VisaService {
     return sources[countryCode] || [];
   }
 
-  private async scrapeSource(source: Source, countryCode: string): Promise<VisaInfo[]> {
+  private async scrapeSource(
+    source: Source,
+    countryCode: string,
+  ): Promise<VisaInfo[]> {
     const { $, url } = await fetchPage(source.url);
     const results: VisaInfo[] = [];
 
@@ -194,19 +217,21 @@ export class VisaService {
         const requirements = extractListItems($, "ul li, ol li");
 
         if (title || description) {
-          results.push({
-            country_code: countryCode,
-            visa_type: this.inferVisaType(title),
-            title: title || "General Visa Information",
-            description: cleanText(description),
-            requirements: requirements.length > 0 ? JSON.stringify(requirements) : null,
-            processing_time: this.extractProcessingTime($section),
-            cost: this.extractCost($section),
-            validity: this.extractValidity($section),
-            source_url: url,
-            source_name: source.name,
-            language: "en",
-          });
+          const visaInfo = new VisaInfo();
+          visaInfo.country_code = countryCode;
+          visaInfo.visa_type = this.inferVisaType(title);
+          visaInfo.title = title || "General Visa Information";
+          visaInfo.description = cleanText(description);
+          visaInfo.requirements =
+            requirements.length > 0 ? JSON.stringify(requirements) : null;
+          visaInfo.processing_time = this.extractProcessingTime($section);
+          visaInfo.cost = this.extractCost($section);
+          visaInfo.validity = this.extractValidity($section);
+          visaInfo.source_url = url;
+          visaInfo.source_name = source.name;
+          visaInfo.language = "en";
+
+          results.push(visaInfo);
         }
       }
     });
@@ -217,19 +242,20 @@ export class VisaService {
         extractText($('meta[name="description"]').attr("content") || "") ||
         extractText($("p").first());
 
-      results.push({
-        country_code: countryCode,
-        visa_type: "general",
-        title: pageTitle || `Visa Information for ${countryCode}`,
-        description: cleanText(pageDescription),
-        requirements: null,
-        processing_time: null,
-        cost: null,
-        validity: null,
-        source_url: url,
-        source_name: source.name,
-        language: "en",
-      });
+      const visaInfo = new VisaInfo();
+      visaInfo.country_code = countryCode;
+      visaInfo.visa_type = "general";
+      visaInfo.title = pageTitle || `Visa Information for ${countryCode}`;
+      visaInfo.description = cleanText(pageDescription);
+      visaInfo.requirements = null;
+      visaInfo.processing_time = null;
+      visaInfo.cost = null;
+      visaInfo.validity = null;
+      visaInfo.source_url = url;
+      visaInfo.source_name = source.name;
+      visaInfo.language = "en";
+
+      results.push(visaInfo);
     }
 
     return results;
@@ -239,13 +265,18 @@ export class VisaService {
     if (!text) return "general";
     const lowerText = text.toLowerCase();
 
-    if (lowerText.includes("tourist") || lowerText.includes("visitor")) return "tourist";
-    if (lowerText.includes("work") || lowerText.includes("employment")) return "work";
-    if (lowerText.includes("student") || lowerText.includes("study")) return "student";
+    if (lowerText.includes("tourist") || lowerText.includes("visitor"))
+      return "tourist";
+    if (lowerText.includes("work") || lowerText.includes("employment"))
+      return "work";
+    if (lowerText.includes("student") || lowerText.includes("study"))
+      return "student";
     if (lowerText.includes("business")) return "business";
     if (lowerText.includes("transit")) return "transit";
-    if (lowerText.includes("family") || lowerText.includes("spouse")) return "family";
-    if (lowerText.includes("permanent") || lowerText.includes("residence")) return "residence";
+    if (lowerText.includes("family") || lowerText.includes("spouse"))
+      return "family";
+    if (lowerText.includes("permanent") || lowerText.includes("residence"))
+      return "residence";
 
     return "general";
   }
@@ -296,26 +327,7 @@ export class VisaService {
     return null;
   }
 
-  private saveVisaInfo(db: ReturnType<DatabaseService["getDb"]>, item: VisaInfo): void {
-    const stmt = db.prepare(`
-      INSERT INTO visa_info (
-        country_code, visa_type, title, description, requirements,
-        processing_time, cost, validity, source_url, source_name, language
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      item.country_code,
-      item.visa_type,
-      item.title,
-      item.description,
-      item.requirements,
-      item.processing_time,
-      item.cost,
-      item.validity,
-      item.source_url,
-      item.source_name,
-      item.language
-    );
+  private async saveVisaInfo(item: VisaInfo): Promise<void> {
+    await this.visaInfoRepository.save(item);
   }
 }

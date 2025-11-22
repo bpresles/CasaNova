@@ -1,185 +1,277 @@
 import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, Not, IsNull } from "typeorm";
 import type { CheerioAPI, Cheerio } from "cheerio";
 import { DatabaseService } from "../database/database.service.js";
+import { HealthcareInfo } from "../../entities/healthcare-info.entity.js";
+import { Country } from "../../entities/country.entity.js";
 import {
   fetchPage,
   extractText,
   cleanText,
   extractListItems,
 } from "../../scrapers/base-scraper.js";
-import type { Source, SourceMap, HealthcareInfo, UsefulLink, EmergencyNumbers, ScrapeResult } from "../../types/index.js";
+import type {
+  Source,
+  SourceMap,
+  UsefulLink,
+  EmergencyNumbers,
+  ScrapeResult,
+} from "../../types/index.js";
 import healthcareSources from "../../sources/healthcare-sources.json" with { type: "json" };
 
 const sources: SourceMap = healthcareSources;
 
-interface HealthcareRow {
-  id: number;
-  country_code: string;
-  category: string;
-  title: string;
-  description: string | null;
-  public_system_info: string | null;
-  insurance_requirements: string | null;
-  emergency_numbers: string | null;
-  useful_links: string | null;
-  source_url: string | null;
-  source_name: string | null;
-  language: string;
-}
-
 @Injectable()
 export class HealthcareService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    @InjectRepository(HealthcareInfo)
+    private healthcareInfoRepository: Repository<HealthcareInfo>,
+    @InjectRepository(Country)
+    private countryRepository: Repository<Country>,
+    private readonly databaseService: DatabaseService,
+  ) {}
 
-  findAll(country?: string, category?: string, language?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM healthcare_info WHERE 1=1";
-    const params: string[] = [];
+  async findAll(country?: string, category?: string, language?: string) {
+    const queryBuilder =
+      this.healthcareInfoRepository.createQueryBuilder("healthcare");
 
     if (country) {
-      query += " AND country_code = ?";
-      params.push(country.toUpperCase());
+      queryBuilder.andWhere("healthcare.country_code = :country", {
+        country: country.toUpperCase(),
+      });
     }
     if (category) {
-      query += " AND category = ?";
-      params.push(category.toLowerCase());
+      queryBuilder.andWhere("healthcare.category = :category", {
+        category: category.toLowerCase(),
+      });
     }
     if (language) {
-      query += " AND language = ?";
-      params.push(language.toLowerCase());
+      queryBuilder.andWhere("healthcare.language = :language", {
+        language: language.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY updated_at DESC";
-    const results = db.prepare(query).all(...params) as HealthcareRow[];
+    queryBuilder.orderBy("healthcare.updated_at", "DESC");
+    const results = await queryBuilder.getMany();
 
     return results.map((r) => ({
       ...r,
-      insurance_requirements: r.insurance_requirements ? JSON.parse(r.insurance_requirements) : null,
-      emergency_numbers: r.emergency_numbers ? JSON.parse(r.emergency_numbers) : null,
+      insurance_requirements: r.insurance_requirements
+        ? JSON.parse(r.insurance_requirements)
+        : null,
+      emergency_numbers: r.emergency_numbers
+        ? JSON.parse(r.emergency_numbers)
+        : null,
       useful_links: r.useful_links ? JSON.parse(r.useful_links) : null,
     }));
   }
 
-  findCountries() {
-    const db = this.databaseService.getDb();
-    return db.prepare(`
-      SELECT DISTINCT c.code, c.name, c.name_fr, c.region,
-             COUNT(h.id) as healthcare_entries
-      FROM countries c
-      LEFT JOIN healthcare_info h ON c.code = h.country_code
-      GROUP BY c.code
-      ORDER BY c.name
-    `).all();
+  async findCountries() {
+    const results = await this.countryRepository
+      .createQueryBuilder("country")
+      .leftJoin("country.healthcare", "healthcare")
+      .select([
+        "country.code",
+        "country.name",
+        "country.name_fr",
+        "country.region",
+      ])
+      .addSelect("COUNT(healthcare.id)", "healthcare_entries")
+      .groupBy("country.code")
+      .addGroupBy("country.name")
+      .addGroupBy("country.name_fr")
+      .addGroupBy("country.region")
+      .orderBy("country.name", "ASC")
+      .getRawMany();
+
+    return results;
   }
 
-  findEmergencyNumbers(countryCode: string) {
-    const db = this.databaseService.getDb();
-    const result = db.prepare(`
-      SELECT emergency_numbers
-      FROM healthcare_info
-      WHERE country_code = ? AND emergency_numbers IS NOT NULL
-      LIMIT 1
-    `).get(countryCode.toUpperCase()) as { emergency_numbers: string } | undefined;
+  async findCategories() {
+    const results = await this.healthcareInfoRepository
+      .createQueryBuilder("healthcare")
+      .select("healthcare.category", "category")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("healthcare.category")
+      .orderBy("count", "DESC")
+      .getRawMany();
 
-    if (!result) return null;
+    return results;
+  }
+
+  async findEmergencyNumbers(countryCode: string) {
+    const result = await this.healthcareInfoRepository.findOne({
+      where: {
+        country_code: countryCode.toUpperCase(),
+        emergency_numbers: Not(IsNull()),
+      },
+      select: ["emergency_numbers"],
+    });
+
+    if (!result || !result.emergency_numbers) return null;
     return JSON.parse(result.emergency_numbers);
   }
 
-  findByCountry(countryCode: string, category?: string) {
-    const db = this.databaseService.getDb();
-    let query = "SELECT * FROM healthcare_info WHERE country_code = ?";
-    const params: string[] = [countryCode.toUpperCase()];
+  async findByCountry(countryCode: string, category?: string) {
+    const queryBuilder = this.healthcareInfoRepository
+      .createQueryBuilder("healthcare")
+      .where("healthcare.country_code = :countryCode", {
+        countryCode: countryCode.toUpperCase(),
+      });
 
     if (category) {
-      query += " AND category = ?";
-      params.push(category.toLowerCase());
+      queryBuilder.andWhere("healthcare.category = :category", {
+        category: category.toLowerCase(),
+      });
     }
 
-    query += " ORDER BY category, updated_at DESC";
-    const results = db.prepare(query).all(...params) as HealthcareRow[];
-    const country = db.prepare("SELECT * FROM countries WHERE code = ?").get(countryCode.toUpperCase());
+    queryBuilder
+      .orderBy("healthcare.category")
+      .addOrderBy("healthcare.updated_at", "DESC");
+
+    const results = await queryBuilder.getMany();
+
+    const country = await this.countryRepository.findOne({
+      where: { code: countryCode.toUpperCase() },
+    });
 
     return {
       country,
       data: results.map((r) => ({
         ...r,
-        insurance_requirements: r.insurance_requirements ? JSON.parse(r.insurance_requirements) : null,
-        emergency_numbers: r.emergency_numbers ? JSON.parse(r.emergency_numbers) : null,
+        insurance_requirements: r.insurance_requirements
+          ? JSON.parse(r.insurance_requirements)
+          : null,
+        emergency_numbers: r.emergency_numbers
+          ? JSON.parse(r.emergency_numbers)
+          : null,
         useful_links: r.useful_links ? JSON.parse(r.useful_links) : null,
       })),
     };
   }
 
   async scrapeCountry(countryCode: string): Promise<HealthcareInfo[]> {
-    const db = this.databaseService.getDb();
     const countrySources = sources[countryCode] || [];
     const results: HealthcareInfo[] = [];
 
     for (const source of countrySources) {
       try {
-        console.log(`[HealthcareScraper] Scraping ${source.name} for ${countryCode}...`);
+        console.log(
+          `[HealthcareScraper] Scraping ${source.name} for ${countryCode}...`,
+        );
         const data = await this.scrapeSource(source, countryCode);
         results.push(...data);
-        this.databaseService.logScrape(source.name, source.url, "success", data.length);
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "success",
+          data.length,
+        );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
         console.error(`[HealthcareScraper] Failed: ${message}`);
-        this.databaseService.logScrape(source.name, source.url, "error", 0, message);
+        await this.databaseService.logScrape(
+          source.name,
+          source.url,
+          "error",
+          0,
+          message,
+        );
       }
     }
 
     for (const item of results) {
-      this.saveHealthcareInfo(db, item);
+      await this.saveHealthcareInfo(item);
     }
 
     return results;
   }
 
-  private async scrapeSource(source: Source, countryCode: string): Promise<HealthcareInfo[]> {
+  async scrapeAll(): Promise<ScrapeResult[]> {
+    const countries = await this.countryRepository.find({
+      select: ["code"],
+    });
+    const results: ScrapeResult[] = [];
+
+    for (const country of countries) {
+      try {
+        const data = await this.scrapeCountry(country.code);
+        results.push({ country: country.code, count: data.length });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error(
+          `Failed to scrape healthcare info for ${country.code}: ${message}`,
+        );
+      }
+    }
+
+    return results;
+  }
+
+  private async scrapeSource(
+    source: Source,
+    countryCode: string,
+  ): Promise<HealthcareInfo[]> {
     const { $, url } = await fetchPage(source.url);
     const results: HealthcareInfo[] = [];
 
-    $("article, .content-section, section, .card, .info-block").each((_, section) => {
-      const $section = $(section);
-      const title = extractText($section.find("h1, h2, h3, .title").first());
+    $("article, .content-section, section, .card, .info-block").each(
+      (_, section) => {
+        const $section = $(section);
+        const title = extractText($section.find("h1, h2, h3, .title").first());
 
-      if (title && this.isHealthcareRelated(title)) {
-        const description = extractText($section.find("p").first());
-        extractListItems($, "ul li, ol li");
+        if (title && this.isHealthcareRelated(title)) {
+          const description = extractText($section.find("p").first());
+          extractListItems($, "ul li, ol li");
 
-        results.push({
-          country_code: countryCode,
-          category: this.inferCategory(title),
-          title,
-          description: cleanText(description),
-          public_system_info: this.extractPublicInfo($section.text()),
-          insurance_requirements: this.extractInsuranceInfo($section),
-          emergency_numbers: this.extractEmergencyNumbers($section.text()),
-          useful_links: this.extractLinks($section, $),
-          source_url: url,
-          source_name: source.name,
-          language: "en",
-        });
-      }
-    });
+          const healthcareInfo = new HealthcareInfo();
+          healthcareInfo.country_code = countryCode;
+          healthcareInfo.category = this.inferCategory(title);
+          healthcareInfo.title = title;
+          healthcareInfo.description = cleanText(description);
+          healthcareInfo.public_system_info = this.extractPublicInfo(
+            $section.text(),
+          );
+          healthcareInfo.insurance_requirements =
+            this.extractInsuranceInfo($section);
+          healthcareInfo.emergency_numbers = this.extractEmergencyNumbers(
+            $section.text(),
+          );
+          healthcareInfo.useful_links = this.extractLinks($section, $);
+          healthcareInfo.source_url = url;
+          healthcareInfo.source_name = source.name;
+          healthcareInfo.language = "en";
+
+          results.push(healthcareInfo);
+        }
+      },
+    );
 
     if (results.length === 0) {
       const pageTitle = extractText($("h1").first()) || extractText($("title"));
-      const pageDescription = extractText($('meta[name="description"]').attr("content") || "") || extractText($("p").first());
+      const pageDescription =
+        extractText($('meta[name="description"]').attr("content") || "") ||
+        extractText($("p").first());
 
-      results.push({
-        country_code: countryCode,
-        category: "general",
-        title: pageTitle || `Healthcare Information for ${countryCode}`,
-        description: cleanText(pageDescription),
-        public_system_info: null,
-        insurance_requirements: null,
-        emergency_numbers: this.getDefaultEmergencyNumbers(countryCode),
-        useful_links: null,
-        source_url: url,
-        source_name: source.name,
-        language: "en",
-      });
+      const healthcareInfo = new HealthcareInfo();
+      healthcareInfo.country_code = countryCode;
+      healthcareInfo.category = "general";
+      healthcareInfo.title =
+        pageTitle || `Healthcare Information for ${countryCode}`;
+      healthcareInfo.description = cleanText(pageDescription);
+      healthcareInfo.public_system_info = null;
+      healthcareInfo.insurance_requirements = null;
+      healthcareInfo.emergency_numbers =
+        this.getDefaultEmergencyNumbers(countryCode);
+      healthcareInfo.useful_links = null;
+      healthcareInfo.source_url = url;
+      healthcareInfo.source_name = source.name;
+      healthcareInfo.language = "en";
+
+      results.push(healthcareInfo);
     }
 
     return results;
@@ -187,7 +279,17 @@ export class HealthcareService {
 
   private isHealthcareRelated(text: string | null): boolean {
     if (!text) return false;
-    const keywords = ["health", "medical", "insurance", "hospital", "doctor", "care", "emergency", "medicine", "patient"];
+    const keywords = [
+      "health",
+      "medical",
+      "insurance",
+      "hospital",
+      "doctor",
+      "care",
+      "emergency",
+      "medicine",
+      "patient",
+    ];
     return keywords.some((kw) => text.toLowerCase().includes(kw));
   }
 
@@ -197,8 +299,10 @@ export class HealthcareService {
     if (lowerText.includes("insurance")) return "insurance";
     if (lowerText.includes("emergency")) return "emergency";
     if (lowerText.includes("hospital")) return "hospitals";
-    if (lowerText.includes("doctor") || lowerText.includes("gp")) return "doctors";
-    if (lowerText.includes("pharmacy") || lowerText.includes("medicine")) return "pharmacy";
+    if (lowerText.includes("doctor") || lowerText.includes("gp"))
+      return "doctors";
+    if (lowerText.includes("pharmacy") || lowerText.includes("medicine"))
+      return "pharmacy";
     if (lowerText.includes("dental")) return "dental";
     return "general";
   }
@@ -219,7 +323,13 @@ export class HealthcareService {
 
   private extractInsuranceInfo($section: Cheerio<any>): string | null {
     const requirements: string[] = [];
-    const insuranceKeywords = ["insurance required", "mandatory insurance", "health coverage", "ehic", "social security"];
+    const insuranceKeywords = [
+      "insurance required",
+      "mandatory insurance",
+      "health coverage",
+      "ehic",
+      "social security",
+    ];
     const text = $section.text().toLowerCase();
     for (const req of insuranceKeywords) {
       if (text.includes(req)) requirements.push(req);
@@ -253,7 +363,9 @@ export class HealthcareService {
       CA: { emergency: "911" },
       AU: { emergency: "000" },
     };
-    return emergencyNumbers[countryCode] ? JSON.stringify(emergencyNumbers[countryCode]) : null;
+    return emergencyNumbers[countryCode]
+      ? JSON.stringify(emergencyNumbers[countryCode])
+      : null;
   }
 
   private extractLinks($section: Cheerio<any>, $: CheerioAPI): string | null {
@@ -268,11 +380,7 @@ export class HealthcareService {
     return links.length > 0 ? JSON.stringify(links) : null;
   }
 
-  private saveHealthcareInfo(db: ReturnType<DatabaseService["getDb"]>, item: HealthcareInfo): void {
-    const stmt = db.prepare(`
-      INSERT INTO healthcare_info (country_code, category, title, description, public_system_info, insurance_requirements, emergency_numbers, useful_links, source_url, source_name, language)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(item.country_code, item.category, item.title, item.description, item.public_system_info, item.insurance_requirements, item.emergency_numbers, item.useful_links, item.source_url, item.source_name, item.language);
+  private async saveHealthcareInfo(item: HealthcareInfo): Promise<void> {
+    await this.healthcareInfoRepository.save(item);
   }
 }
