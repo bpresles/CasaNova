@@ -14,7 +14,7 @@ async function bootstrap() {
 
   app.useBodyParser("json", { limit: "10mb" });
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 5000;
   await app.listen(port);
   console.log(`CasaNova API running on http://localhost:${port}`);
 }
