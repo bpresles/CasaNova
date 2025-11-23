@@ -52,13 +52,10 @@ export class BankingService {
 
     return results.map((r) => ({
       ...r,
-      account_requirements: r.account_requirements
-        ? JSON.parse(r.account_requirements)
-        : null,
-      recommended_banks: r.recommended_banks
-        ? JSON.parse(r.recommended_banks)
-        : null,
-      tips: r.tips ? JSON.parse(r.tips) : null,
+      country: r.country_code.toUpperCase(),
+      account_requirements: null,
+      recommended_banks: null,
+      tips: null,
     }));
   }
 

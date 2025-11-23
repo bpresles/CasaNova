@@ -6,9 +6,8 @@ import { Country } from "../../entities/country.entity.js";
 import { VisaInfo } from "../../entities/visa-info.entity.js";
 import {
   cleanText,
-  extractListItems,
   extractText,
-  fetchPage,
+  fetchPage
 } from "../../scrapers/base-scraper.js";
 import visaSources from "../../sources/visa-sources.json" with { type: "json" };
 import type { ScrapeResult, Source, SourceMap } from "../../types/index.js";
@@ -52,7 +51,8 @@ export class VisaService {
 
     return results.map((r) => ({
       ...r,
-      requirements: r.requirements ? JSON.parse(r.requirements) : null,
+      requirements: undefined,
+      country: r.country_code.toUpperCase(),
     }));
   }
 
@@ -115,7 +115,8 @@ export class VisaService {
       country,
       data: results.map((r) => ({
         ...r,
-        requirements: r.requirements ? JSON.parse(r.requirements) : null,
+        requirements: undefined,
+        country: r.country_code.toUpperCase(),
       })),
     };
   }
@@ -133,7 +134,8 @@ export class VisaService {
 
     return results.map((r) => ({
       ...r,
-      requirements: r.requirements ? JSON.parse(r.requirements) : null,
+      requirements: undefined,
+      country: r.country_code.toUpperCase(),
     }));
   }
 
@@ -216,7 +218,6 @@ export class VisaService {
 
       if (title) {
         const description = extractText($section.find("p").first());
-        const requirements = extractListItems($, "ul li, ol li");
 
         if (title || description) {
           const visaInfo = new VisaInfo();
@@ -224,8 +225,7 @@ export class VisaService {
           visaInfo.visa_type = this.inferVisaType(title);
           visaInfo.title = title || "General Visa Information";
           visaInfo.description = cleanText(description);
-          visaInfo.requirements =
-            requirements.length > 0 ? JSON.stringify(requirements) : null;
+          visaInfo.requirements =  null;
           visaInfo.processing_time = this.extractProcessingTime($section);
           visaInfo.cost = this.extractCost($section);
           visaInfo.validity = this.extractValidity($section);

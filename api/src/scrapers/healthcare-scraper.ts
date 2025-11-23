@@ -1,14 +1,14 @@
-import type { CheerioAPI, Cheerio } from "cheerio";
+import type { Cheerio, CheerioAPI } from "cheerio";
+import { getDb, logScrape } from "../db/database.js";
+import healthcareSources from "../sources/healthcare-sources.json" with { type: "json" };
+import type { EmergencyNumbers, HealthcareInfo, ScrapeResult, Source, SourceMap, UsefulLink } from "../types/index.js";
 import {
   BaseScraper,
-  fetchPage,
-  extractText,
   cleanText,
   extractListItems,
+  extractText,
+  fetchPage,
 } from "./base-scraper.js";
-import { getDb, logScrape } from "../db/database.js";
-import type { Source, SourceMap, HealthcareInfo, UsefulLink, EmergencyNumbers, ScrapeResult } from "../types/index.js";
-import healthcareSources from "../sources/healthcare-sources.json" with { type: "json" };
 
 const sources: SourceMap = healthcareSources;
 

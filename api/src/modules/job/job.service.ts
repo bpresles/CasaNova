@@ -56,7 +56,8 @@ export class JobService {
 
     return results.map((r) => ({
       ...r,
-      job_search_tips: r.job_search_tips ? JSON.parse(r.job_search_tips) : null,
+      country: r.country_code.toUpperCase(),
+      job_search_tips:   null,
       popular_sectors: r.popular_sectors ? JSON.parse(r.popular_sectors) : null,
       job_portals: r.job_portals ? JSON.parse(r.job_portals) : null,
     }));
@@ -140,9 +141,8 @@ export class JobService {
       country,
       data: results.map((r) => ({
         ...r,
-        job_search_tips: r.job_search_tips
-          ? JSON.parse(r.job_search_tips)
-          : null,
+        country: r.country_code.toUpperCase(),
+        job_search_tips: null,
         popular_sectors: r.popular_sectors
           ? JSON.parse(r.popular_sectors)
           : null,

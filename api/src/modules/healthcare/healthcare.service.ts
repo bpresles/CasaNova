@@ -56,11 +56,9 @@ export class HealthcareService {
     queryBuilder.orderBy("healthcare.updated_at", "DESC");
     const results = await queryBuilder.getMany();
 
-    return results.map((r) => ({
+    return results.map((r: HealthcareInfo) => ({
       ...r,
-      insurance_requirements: r.insurance_requirements
-        ? JSON.parse(r.insurance_requirements)
-        : null,
+      insurance_requirements:  null,
       emergency_numbers: r.emergency_numbers
         ? JSON.parse(r.emergency_numbers)
         : null,

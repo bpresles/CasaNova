@@ -1,14 +1,13 @@
-import type { CheerioAPI, Cheerio } from "cheerio";
+import type { Cheerio, CheerioAPI } from "cheerio";
+import { getDb, logScrape } from "../db/database.js";
+import visaSources from "../sources/visa-sources.json" with { type: "json" };
+import type { ScrapeResult, Source, SourceMap, VisaInfo } from "../types/index.js";
 import {
   BaseScraper,
-  fetchPage,
-  extractText,
   cleanText,
-  extractListItems,
+  extractText,
+  fetchPage
 } from "./base-scraper.js";
-import { getDb, logScrape } from "../db/database.js";
-import type { Source, SourceMap, VisaInfo, ScrapeResult } from "../types/index.js";
-import visaSources from "../sources/visa-sources.json" with { type: "json" };
 
 const sources: SourceMap = visaSources;
 
@@ -62,7 +61,6 @@ export class VisaScraper extends BaseScraper {
 
       if (title) {
         const description = extractText($section.find("p").first());
-        const requirements = extractListItems($, "ul li, ol li");
 
         if (title || description) {
           results.push({
@@ -70,8 +68,6 @@ export class VisaScraper extends BaseScraper {
             visa_type: this.inferVisaType(title),
             title: title || "General Visa Information",
             description: cleanText(description),
-            requirements:
-              requirements.length > 0 ? JSON.stringify(requirements) : null,
             processing_time: this.extractProcessingTime($section, $),
             cost: this.extractCost($section, $),
             validity: this.extractValidity($section, $),
@@ -95,7 +91,6 @@ export class VisaScraper extends BaseScraper {
         visa_type: "general",
         title: pageTitle || `Visa Information for ${countryCode}`,
         description: cleanText(pageDescription),
-        requirements: null,
         processing_time: null,
         cost: null,
         validity: null,
@@ -180,7 +175,7 @@ export class VisaScraper extends BaseScraper {
   saveVisaInfo(db: ReturnType<typeof getDb>, item: VisaInfo): void {
     const stmt = db.prepare(`
       INSERT INTO visa_info (
-        country_code, visa_type, title, description, requirements,
+        country_code, visa_type, title, description,
         processing_time, cost, validity, source_url, source_name, language
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -190,7 +185,6 @@ export class VisaScraper extends BaseScraper {
       item.visa_type,
       item.title,
       item.description,
-      item.requirements,
       item.processing_time,
       item.cost,
       item.validity,
