@@ -38,7 +38,7 @@ export interface VisaInfo {
   visa_type: string;
   title: string;
   description: string | null;
-  requirements: string | null;
+  requirements?: string | null;
   processing_time: string | null;
   cost: string | null;
   validity: string | null;

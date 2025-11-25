@@ -8,6 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.set("query parser", "extended"); // See the Express v5 migration https://docs.nestjs.com/migration-guide
+  app.setGlobalPrefix("api");
 
   app.enableCors();
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
