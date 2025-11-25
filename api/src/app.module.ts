@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
 import { ServeStaticModule } from "@nestjs/serve-static";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { dirname, join } from "path";
@@ -14,6 +15,7 @@ import { VisaInfo } from "./entities/visa-info.entity.js";
 import { BankingModule } from "./modules/banking/banking.module.js";
 import { CountriesModule } from "./modules/countries/countries.module.js";
 import { DatabaseModule } from "./modules/database/database.module.js";
+import { GeminiModule } from "./modules/gemini/gemini.module.js";
 import { HealthcareModule } from "./modules/healthcare/healthcare.module.js";
 import { HousingModule } from "./modules/housing/housing.module.js";
 import { JobModule } from "./modules/job/job.module.js";
@@ -24,6 +26,7 @@ const __dirname = dirname(__filename);
 
 @Module({
   imports: [
+    ConfigModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, "..", "client"),
       serveStaticOptions: {
@@ -45,6 +48,7 @@ const __dirname = dirname(__filename);
     HealthcareModule,
     BankingModule,
     CountriesModule,
+    GeminiModule,
   ],
   controllers: [AppController],
 })

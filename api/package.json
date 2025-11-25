@@ -20,8 +20,11 @@
     "migration:show": "npm run typeorm -- migration:show -d src/data-source.ts"
   },
   "dependencies": {
+    "@google/genai": "^1.30.0",
     "@nestjs/common": "11.1.9",
+    "@nestjs/config": "^4.0.2",
     "@nestjs/core": "11.1.9",
+    "@nestjs/mapped-types": "*",
     "@nestjs/platform-express": "11.1.9",
     "@nestjs/serve-static": "^5.0.4",
     "@nestjs/typeorm": "11.0.0",
